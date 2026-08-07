@@ -16,6 +16,7 @@ type NewWorkspaceDaemonClient = Pick<
   | "connect"
   | "createPaseoWorktree"
   | "createWorkspace"
+  | "fetchAgents"
   | "fetchWorkspaces"
   | "getPaseoWorktreeList"
   | "getDaemonConfig"
@@ -24,6 +25,7 @@ type NewWorkspaceDaemonClient = Pick<
   | "enablePlugin"
   | "inspectWorkspaceRecovery"
   | "listProjects"
+  | "listTerminals"
   | "on"
   | "patchDaemonConfig"
   | "removeProject"
@@ -620,5 +622,70 @@ export async function delayBrowserAgentCreatedStatus(
     },
     waitForCreateRequest: () => createRequestSeen,
     waitForDelayedCreatedStatus: () => delayedCreatedStatusSeen,
+  };
+}
+
+export interface WorkspaceCreatedDelayControl {
+  release(): void;
+  waitForCreateRequest(): Promise<void>;
+}
+
+/**
+ * Holds `workspace.create.response` so a test can act as the user does while the daemon is still
+ * running `git worktree add` — most importantly, navigate somewhere else.
+ */
+export async function delayBrowserWorkspaceCreatedResponse(
+  page: Page,
+): Promise<WorkspaceCreatedDelayControl> {
+  const daemonPortPattern = daemonWsRoutePattern();
+  const createRequestIds = new Set<string>();
+  const delayedForwards: Array<() => void> = [];
+  let releaseRequested = false;
+  let resolveCreateRequest: (() => void) | null = null;
+  const createRequestSeen = new Promise<void>((resolve) => {
+    resolveCreateRequest = resolve;
+  });
+
+  await page.routeWebSocket(daemonPortPattern, (ws) => {
+    const server = ws.connectToServer();
+
+    ws.onMessage((message) => {
+      const sessionMessage = getSessionMessage(message);
+      if (sessionMessage?.type === "workspace.create.request") {
+        const requestId = getStringField(sessionMessage, "requestId");
+        if (requestId) {
+          createRequestIds.add(requestId);
+          resolveCreateRequest?.();
+        }
+      }
+      server.send(message);
+    });
+
+    server.onMessage((message) => {
+      const sessionMessage = getSessionMessage(message);
+      const payload =
+        sessionMessage?.type === "workspace.create.response" &&
+        typeof sessionMessage.payload === "object"
+          ? (sessionMessage.payload as Record<string, unknown>)
+          : null;
+      const requestId = payload ? getStringField(payload, "requestId") : null;
+
+      if (requestId && createRequestIds.has(requestId) && !releaseRequested) {
+        delayedForwards.push(() => ws.send(message));
+        return;
+      }
+
+      ws.send(message);
+    });
+  });
+
+  return {
+    release() {
+      releaseRequested = true;
+      for (const forward of delayedForwards.splice(0)) {
+        forward();
+      }
+    },
+    waitForCreateRequest: () => createRequestSeen,
   };
 }
