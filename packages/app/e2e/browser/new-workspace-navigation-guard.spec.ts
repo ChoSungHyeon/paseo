@@ -5,9 +5,12 @@ import {
   archiveLocalWorkspaceFromDaemon,
   archiveWorkspaceFromDaemon,
   connectNewWorkspaceDaemonClient,
+  countWorkspaceAgents,
+  countWorkspaceTerminals,
   delayBrowserWorkspaceCreatedResponse,
   openNewWorkspaceComposer,
   openProjectViaDaemon,
+  waitForCreatedWorkspace,
 } from "../support/helpers/new-workspace";
 import { createTempGitRepo } from "../support/helpers/workspace";
 import { expectAppRoute } from "../support/helpers/route-assertions";
@@ -40,30 +43,6 @@ const TERMINAL_PROFILE: TerminalProfile = {
   command: "/bin/sh",
   args: ["-c", 'echo captured: "$0"; sleep 120', "{{{prompt}}}"],
 };
-
-async function findUnknownWorkspace(
-  client: Awaited<ReturnType<typeof connectNewWorkspaceDaemonClient>>,
-  knownWorkspaceIds: ReadonlySet<string>,
-) {
-  const payload = await client.fetchWorkspaces();
-  return payload.entries.find((candidate) => !knownWorkspaceIds.has(candidate.id)) ?? null;
-}
-
-async function countWorkspaceAgents(
-  client: Awaited<ReturnType<typeof connectNewWorkspaceDaemonClient>>,
-  workspaceId: string,
-): Promise<number> {
-  const payload = await client.fetchAgents({ filter: { includeArchived: true } });
-  return payload.entries.filter((entry) => entry.agent.workspaceId === workspaceId).length;
-}
-
-async function countWorkspaceTerminals(
-  client: Awaited<ReturnType<typeof connectNewWorkspaceDaemonClient>>,
-  workspaceId: string,
-): Promise<number> {
-  const payload = await client.listTerminals(undefined, undefined, { workspaceId });
-  return payload.terminals.length;
-}
 
 test.describe("New workspace navigation guard", () => {
   let client: Awaited<ReturnType<typeof connectNewWorkspaceDaemonClient>>;
@@ -138,16 +117,7 @@ test.describe("New workspace navigation guard", () => {
 
       // Wait for the agent the background path is responsible for creating, then prove the app
       // never followed it. Polling the daemon rather than the URL keeps this ordering explicit.
-      await expect
-        .poll(async () => (await findUnknownWorkspace(client, knownWorkspaceIds))?.id ?? null, {
-          timeout: 60_000,
-        })
-        .not.toBeNull();
-
-      const createdWorkspace = await findUnknownWorkspace(client, knownWorkspaceIds);
-      if (!createdWorkspace) {
-        throw new Error("Created workspace disappeared from the daemon");
-      }
+      const createdWorkspace = await waitForCreatedWorkspace(client, knownWorkspaceIds);
       createdWorktreeDirectories.add(createdWorkspace.workspaceDirectory);
 
       await expect
@@ -217,16 +187,7 @@ test.describe("New workspace navigation guard", () => {
       });
       createDelay.release();
 
-      await expect
-        .poll(async () => (await findUnknownWorkspace(client, knownWorkspaceIds))?.id ?? null, {
-          timeout: 60_000,
-        })
-        .not.toBeNull();
-
-      const createdWorkspace = await findUnknownWorkspace(client, knownWorkspaceIds);
-      if (!createdWorkspace) {
-        throw new Error("Created workspace disappeared from the daemon");
-      }
+      const createdWorkspace = await waitForCreatedWorkspace(client, knownWorkspaceIds);
       createdWorktreeDirectories.add(createdWorkspace.workspaceDirectory);
 
       // Wait for the terminal, not just the workspace. The launch path spawns the terminal and

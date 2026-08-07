@@ -689,3 +689,50 @@ export async function delayBrowserWorkspaceCreatedResponse(
     waitForCreateRequest: () => createRequestSeen,
   };
 }
+
+type WorkspaceEntry = Awaited<
+  ReturnType<NewWorkspaceDaemonClient["fetchWorkspaces"]>
+>["entries"][number];
+
+/**
+ * Waits for a workspace the caller did not already know about, and returns it. Tests that create a
+ * workspace without navigating to it have no route to assert on, so the daemon's own list is the
+ * signal that creation finished.
+ */
+export async function waitForCreatedWorkspace(
+  client: NewWorkspaceDaemonClient,
+  knownWorkspaceIds: ReadonlySet<string>,
+  options?: { timeout?: number },
+): Promise<WorkspaceEntry> {
+  let created: WorkspaceEntry | undefined;
+  await expect
+    .poll(
+      async () => {
+        const payload = await client.fetchWorkspaces();
+        created = payload.entries.find((entry) => !knownWorkspaceIds.has(entry.id));
+        return created !== undefined;
+      },
+      { timeout: options?.timeout ?? 60_000 },
+    )
+    .toBe(true);
+  if (!created) {
+    throw new Error("Workspace list reported a new workspace but it could not be read back");
+  }
+  return created;
+}
+
+export async function countWorkspaceAgents(
+  client: NewWorkspaceDaemonClient,
+  workspaceId: string,
+): Promise<number> {
+  const payload = await client.fetchAgents({ filter: { includeArchived: true } });
+  return payload.entries.filter((entry) => entry.agent.workspaceId === workspaceId).length;
+}
+
+export async function countWorkspaceTerminals(
+  client: NewWorkspaceDaemonClient,
+  workspaceId: string,
+): Promise<number> {
+  const payload = await client.listTerminals(undefined, undefined, { workspaceId });
+  return payload.terminals.length;
+}
