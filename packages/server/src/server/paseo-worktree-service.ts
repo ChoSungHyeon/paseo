@@ -39,7 +39,6 @@ export interface CreatePaseoWorktreeInput extends CreateWorktreeCoreInput {
 export interface CreatePaseoWorktreeResult {
   worktree: WorktreeConfig;
   worktreeIncludeSummary?: WorktreeIncludeSummary;
-  worktreeIncludeSummary?: WorktreeIncludeSummary;
   intent: WorktreeCreationIntent;
   workspace: PersistedWorkspaceRecord;
   repoRoot: string;
@@ -120,7 +119,6 @@ async function createPaseoWorktreeWithPriority(
 
     return {
       worktree: createdWorktree.worktree,
-      worktreeIncludeSummary: createdWorktree.worktreeIncludeSummary,
       worktreeIncludeSummary: createdWorktree.worktreeIncludeSummary,
       intent: createdWorktree.intent,
       workspace,
