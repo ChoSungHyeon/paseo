@@ -10,6 +10,7 @@ async function main() {
   const release = path.resolve(process.argv[2]);
   const portableSandbox = process.argv[3] === "enabled";
   const artifactRoot = process.env.PASEO_DESKTOP_SMOKE_ARTIFACT_DIR;
+  const installedOnly = process.argv.includes("--installed-only");
   const extracted = fs.mkdtempSync(path.join(os.tmpdir(), "paseo-linux-artifacts-"));
   const findArtifact = (suffix) => {
     const matches = fs.readdirSync(release).filter((file) => file.endsWith(suffix));
@@ -17,12 +18,13 @@ async function main() {
     return path.join(release, matches[0]);
   };
   try {
-    process.env.PASEO_DESKTOP_SMOKE_ARTIFACT_DIR = path.join(artifactRoot, "deb");
+    process.env.PASEO_DESKTOP_SMOKE_ARTIFACT_DIR = path.join(artifactRoot, "installed");
     const helper = fs.statSync("/opt/Paseo/chrome-sandbox");
     if (helper.uid !== 0 || (helper.mode & 0o7777) !== 0o4755) {
-      throw new Error("Installed .deb did not provide a root-owned 4755 helper");
+      throw new Error("Installed native package did not provide a root-owned 4755 helper");
     }
     await smokePackagedDesktopApp({ appPath: "/opt/Paseo", expectedSandbox: true });
+    if (installedOnly) return;
 
     const appImage = findArtifact(".AppImage");
     fs.chmodSync(appImage, 0o755);

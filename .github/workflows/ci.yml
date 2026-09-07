@@ -255,6 +255,18 @@ jobs:
         env:
           PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke/userns
 
+      - name: Smoke installed RPM with restricted user namespaces
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1
+          sudo dpkg --remove paseo
+          # Ubuntu supplies the runtime libraries under Debian package names.
+          # RPM still performs the real payload installation and postinstall.
+          sudo rpm --install --nodeps packages/desktop/release/*.rpm
+          node packages/desktop/e2e/linux-artifact-smoke.js packages/desktop/release disabled --installed-only
+        env:
+          PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke/rpm
+
       - name: Upload packaged smoke diagnostics
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() && runner.os == 'Linux' }}
