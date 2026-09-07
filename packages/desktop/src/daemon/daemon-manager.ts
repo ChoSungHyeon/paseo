@@ -37,6 +37,7 @@ import {
 import type { DesktopSettings } from "../settings/desktop-settings.js";
 import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
 import { isRunningUnderARM64Translation } from "../system/arm64-translation.js";
+import { describeSandbox } from "../diagnostics/sandbox.js";
 import { getDesktopAppLogs } from "../diagnostics/app-logs.js";
 import { getDesktopUpdaterDiagnostics } from "../diagnostics/updater.js";
 import {
@@ -531,6 +532,11 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     stop_desktop_daemon: (args) => stopDesktopDaemon(parseDesktopDaemonStopReason(args)),
     restart_desktop_daemon: () => restartDaemon(),
     desktop_daemon_logs: () => getDaemonLogs(),
+    desktop_sandbox_diagnostics: () =>
+      describeSandbox({
+        disabled: app.commandLine.hasSwitch("no-sandbox"),
+        launcherReason: process.env.PASEO_DESKTOP_SANDBOX_REASON,
+      }),
     desktop_app_logs: () => getDesktopAppLogs(),
     desktop_update_diagnostics: () => getDesktopUpdaterDiagnostics(),
     desktop_get_system_idle_time: () => powerMonitor.getSystemIdleTime() * 1000,
