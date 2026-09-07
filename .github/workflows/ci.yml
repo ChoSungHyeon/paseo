@@ -241,7 +241,7 @@ jobs:
             echo "Expected the launching user's namespace probe to be denied"
             exit 1
           fi
-          sudo dpkg -i packages/desktop/release/*.deb
+          sudo apt-get install -y ./packages/desktop/release/*.deb
           node packages/desktop/e2e/linux-artifact-smoke.js packages/desktop/release disabled
         env:
           PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke/restricted
