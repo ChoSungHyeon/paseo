@@ -68,7 +68,6 @@ import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
 import { useFormPreferences } from "@/hooks/use-form-preferences";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
-import { generateMessageId } from "@/types/stream";
 import { toErrorMessage } from "@/utils/error-messages";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import {
@@ -800,6 +799,8 @@ async function createAndMergeWorkspace(input: {
 }
 
 async function createMultiplicityWorkspace(input: {
+  idempotencyKey: string;
+  worktreeSlug: string;
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   isolation: "local" | "worktree";
   project: HostProjectListItem;
@@ -823,12 +824,13 @@ async function createMultiplicityWorkspace(input: {
     attachments: input.attachments,
   });
   const payload = await input.client.createWorkspace({
+    idempotencyKey: input.idempotencyKey,
     source: isWorktree
       ? {
           kind: "worktree",
           cwd: input.sourceDirectory,
           projectId,
-          worktreeSlug: createNameId(),
+          worktreeSlug: input.worktreeSlug,
           ...input.checkoutRequest,
         }
       : {
@@ -1035,7 +1037,9 @@ function submitWorkspaceDraft(input: SubmitDraftInput): void {
     initialSetup,
   } = input;
   const draftId = draftIdInput?.trim() || generateDraftId();
-  const clientMessageId = generateMessageId();
+  const existing = useCreateFlowStore.getState().pendingByDraftId[draftId];
+  if (existing?.serverId === serverId) return;
+  const clientMessageId = `${draftId}:initial-message`;
   const timestamp = Date.now();
   const wirePayload = splitComposerAttachmentsForSubmit(attachments, {
     format: resolveComposerAttachmentSubmitFormat({
@@ -1575,6 +1579,10 @@ export function NewWorkspaceScreen({
   // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
   const supportsWorkspaceMultiplicity = useHostFeature(selectedServerId, "workspaceMultiplicity");
   const supportsForgeSearch = useHostFeature(selectedServerId, "forgeSearch");
+  const [creationIdentity] = useState(() => ({
+    draftId: draftId ?? generateDraftId(),
+    worktreeSlug: createNameId(),
+  }));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdWorkspace, setCreatedWorkspace] = useState<ReturnType<
     typeof normalizeWorkspaceDescriptor
@@ -1997,6 +2005,8 @@ export function NewWorkspaceScreen({
         : undefined;
       const normalizedWorkspace = supportsWorkspaceMultiplicity
         ? await createMultiplicityWorkspace({
+            idempotencyKey: creationIdentity.draftId,
+            worktreeSlug: creationIdentity.worktreeSlug,
             client: connectedClient,
             isolation: effectiveIsolation,
             project: selectedProject,
@@ -2021,6 +2031,7 @@ export function NewWorkspaceScreen({
     },
     [
       buildCreateWorktreeInput,
+      creationIdentity,
       createdWorkspace,
       effectiveIsolation,
       mergeWorkspaces,
@@ -2061,7 +2072,7 @@ export function NewWorkspaceScreen({
           ensureWorkspace,
           serverId: selectedServerId,
           clearDraft: chatDraft.clear,
-          draftId,
+          draftId: creationIdentity.draftId,
           supportsForgeSearch,
           labels: {
             composerStateRequired: t("newWorkspace.errors.composerStateRequired"),
@@ -2077,7 +2088,7 @@ export function NewWorkspaceScreen({
     },
     [
       composerState,
-      draftId,
+      creationIdentity,
       chatDraft.clear,
       ensureWorkspace,
       forkDraftSetup,
