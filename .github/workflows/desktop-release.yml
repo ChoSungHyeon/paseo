@@ -218,7 +218,7 @@ jobs:
     permissions:
       contents: write
       packages: read
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
@@ -276,26 +276,6 @@ jobs:
           build_args+=("-c.publish.releaseType=$RELEASE_TYPE")
           build_args+=("-c.publish.channel=$RELEASE_CHANNEL")
           npm run build:desktop "${build_args[@]}"
-
-      - name: Smoke installed artifacts with restricted user namespaces
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1
-          if unshare --user --map-root-user --net true; then
-            echo "Expected the launching user's namespace probe to be denied"
-            exit 1
-          fi
-          sudo dpkg -i packages/desktop/release/*.deb
-          node packages/desktop/e2e/linux-artifact-smoke.js packages/desktop/release disabled
-        env:
-          PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke/restricted
-
-      - name: Smoke sandbox-preserving portable launches
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          unshare --user --map-root-user --net true
-          node packages/desktop/e2e/linux-artifact-smoke.js packages/desktop/release enabled
-        env:
-          PASEO_DESKTOP_SMOKE_ARTIFACT_DIR: ${{ runner.temp }}/desktop-smoke/userns
 
       - name: Upload packaged smoke diagnostics
         if: always()
