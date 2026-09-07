@@ -6095,7 +6095,6 @@ export class Session {
         }
       } else {
         descriptor = await create();
-
       }
       const workspace = await this.workspaceRegistry.get(descriptor.id);
       this.emit({
