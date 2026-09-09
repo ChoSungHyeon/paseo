@@ -38,18 +38,46 @@ async function closeFind(page: Page) {
   await query(page).press("Escape");
   await expect(source(page)).toBeFocused();
 }
-async function expectFindAtTopRight(page: Page) {
-  const pane = await page
+async function expectActiveMatchUncovered(page: Page) {
+  const match = page.locator(".cm-searchMatch-selected").filter({ visible: true }).first();
+  await expect(match).toBeVisible();
+  const widget = page.getByLabel("Find", { exact: true }).filter({ visible: true });
+  await expect
+    .poll(async () => {
+      const m = await match.boundingBox();
+      const w = await widget.boundingBox();
+      if (!m || !w) return "missing";
+      const covered =
+        m.x < w.x + w.width && m.x + m.width > w.x && m.y < w.y + w.height && m.y + m.height > w.y;
+      return covered ? "covered by Find" : "visible";
+    })
+    .toBe("visible");
+}
+
+async function findBoxes(page: Page) {
+  const pane = (await page
     .getByTestId("workspace-file-pane")
     .filter({ visible: true })
-    .boundingBox();
-  const widget = await page
+    .boundingBox())!;
+  const widget = (await page
     .getByLabel("Find", { exact: true })
     .filter({ visible: true })
-    .boundingBox();
-  expect(widget!.x + widget!.width).toBeLessThanOrEqual(pane!.x + pane!.width);
-  expect(widget!.x).toBeGreaterThanOrEqual(pane!.x);
-  expect(widget!.y).toBeLessThan(pane!.y + 70);
+    .boundingBox())!;
+  return { pane, widget };
+}
+
+async function expectFindInsidePane(page: Page) {
+  const { pane, widget } = await findBoxes(page);
+  expect(widget.x).toBeGreaterThanOrEqual(pane.x);
+  expect(widget.x + widget.width).toBeLessThanOrEqual(pane.x + pane.width);
+  expect(widget.y).toBeGreaterThanOrEqual(pane.y);
+  expect(widget.y + widget.height).toBeLessThanOrEqual(pane.y + pane.height + 1);
+}
+
+async function expectFindAtTopRight(page: Page) {
+  await expectFindInsidePane(page);
+  const { pane, widget } = await findBoxes(page);
+  expect(widget.y).toBeLessThan(pane.y + 70);
 }
 
 test("finds literal text at the top of editable source and returns focus at the inspected match", async ({
@@ -75,9 +103,10 @@ test("finds literal text at the top of editable source and returns focus at the 
   await closeFind(page);
   await expect(query(page)).toBeHidden();
   await expect(page.getByLabel("Line 1, column 10")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Find", exact: true })).toHaveCount(0);
 
-  await test.step("reopen from touch action, preserve replace and Undo/save", async () => {
-    await page.getByRole("button", { name: "Find", exact: true }).click();
+  await test.step("reopen with the shortcut, preserve replace and Undo/save", async () => {
+    await source(page).press("ControlOrMeta+f");
     await expect(query(page)).toBeFocused();
     await page.getByRole("button", { name: "Toggle replace" }).click();
     await page.getByRole("textbox", { name: "Replace with" }).fill("literal");
@@ -175,7 +204,7 @@ test("targets the focused source in split panes and refocuses an open query", as
 
 test.describe("narrow touch browser", () => {
   test.use({ hasTouch: true });
-  test("opens Find by touch and keeps controls inside the source pane", async ({
+  test("keeps Find controls inside a narrow source pane", async ({
     page,
     withWorkspace,
   }, testInfo) => {
@@ -184,12 +213,15 @@ test.describe("narrow touch browser", () => {
     await workspace.navigateTo();
     await openSource(page, "touch.txt");
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole("button", { name: "Find", exact: true }).tap();
+    await expect(page.getByRole("button", { name: "Find", exact: true })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("touch-find-closed.png") });
+    await source(page).focus();
+    await source(page).press("ControlOrMeta+f");
     await expect(query(page)).toBeFocused();
     await query(page).fill("needle");
     await page.getByRole("button", { name: "Next match" }).tap();
     await expect(status(page)).toHaveText("2 of 2");
-    await expectFindAtTopRight(page);
+    await expectFindInsidePane(page);
     await page.screenshot({ path: testInfo.outputPath("touch-find.png") });
     await page.getByRole("button", { name: "Close Find" }).tap();
     await expect(source(page)).toBeFocused();
@@ -245,7 +277,7 @@ test("declines multiline selection seeds and keeps replacement aligned with the 
   await expect(page.getByLabel("Line 3, column 10")).toBeVisible();
 
   await selectFirstTwoLines(page);
-  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await source(page).press("ControlOrMeta+f");
   await expect(query(page)).toHaveValue("alphabeta");
   await query(page).press("Enter");
   await expect(status(page)).toHaveText("1 of 1");
@@ -291,3 +323,70 @@ for (const startingField of ["Find in pane", "Replace with"] as const) {
     await expect(page.getByLabel("Line 1, column 13")).toBeVisible();
   });
 }
+
+test.describe("the active match stays visible under the floating widget", () => {
+  test.describe("narrow touch browser", () => {
+    test.use({ hasTouch: true });
+    test("reveals a short file's match that the widget would cover", async ({
+      page,
+      withWorkspace,
+    }, testInfo) => {
+      const workspace = await withWorkspace({ prefix: "pane-find-cover-touch-" });
+      await writeFile(path.join(workspace.repoPath, "touch.txt"), "touch needle\nnext needle\n");
+      await workspace.navigateTo();
+      await openSource(page, "touch.txt");
+      await page.setViewportSize({ width: 390, height: 844 });
+      await source(page).focus();
+      await source(page).press("ControlOrMeta+f");
+      await expect(query(page)).toBeFocused();
+      await query(page).fill("needle");
+      await expect(status(page)).toHaveText("1 of 2");
+      await expectActiveMatchUncovered(page);
+      await page.getByRole("button", { name: "Next match" }).tap();
+      await expect(status(page)).toHaveText("2 of 2");
+      await expectActiveMatchUncovered(page);
+      await page.screenshot({ path: testInfo.outputPath("touch-match-uncovered.png") });
+      await expect(query(page)).toHaveValue("needle");
+      await page.getByRole("button", { name: "Close Find" }).tap();
+      await expect(source(page)).toBeFocused();
+    });
+  });
+
+  test("reveals a match beneath the top-right widget in a narrow desktop pane", async ({
+    page,
+    withWorkspace,
+  }, testInfo) => {
+    const workspace = await withWorkspace({ prefix: "pane-find-cover-split-" });
+    await writeFile(path.join(workspace.repoPath, "left.txt"), "left filler\n");
+    await writeFile(path.join(workspace.repoPath, "right.txt"), "needle one\nplain\n");
+    await workspace.navigateTo();
+    await openSource(page, "left.txt");
+    await runWorkspaceActionFromCommandCenter(page, "Split pane right");
+    await openFileFromExplorer(page, "right.txt");
+    const right = source(page).filter({ hasText: "needle one" });
+    await expect(right).toBeVisible();
+    await right.click();
+    await right.press("ControlOrMeta+f");
+    await query(page).fill("needle");
+    await expect(status(page)).toHaveText("1 of 1");
+    await expectActiveMatchUncovered(page);
+    await page.screenshot({ path: testInfo.outputPath("split-match-uncovered.png") });
+
+    await test.step("stays visible when Replace expands the widget", async () => {
+      await page.getByRole("button", { name: "Toggle replace" }).click();
+      await page.getByRole("textbox", { name: "Replace with" }).fill("hay");
+      await expectActiveMatchUncovered(page);
+      await page.screenshot({ path: testInfo.outputPath("split-replace-uncovered.png") });
+    });
+
+    await test.step("navigation and query focus still work", async () => {
+      await query(page).press("ControlOrMeta+f");
+      await expectQuerySelected(page, "needle");
+      await query(page).press("Enter");
+      await expect(status(page)).toHaveText("1 of 1");
+      await expectActiveMatchUncovered(page);
+    });
+    await query(page).press("Escape");
+    await expect(right).toBeFocused();
+  });
+});

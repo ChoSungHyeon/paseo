@@ -16,13 +16,19 @@ import {
 
 const MATCH_STATUS_LIMIT = 10_000;
 
+/** Which corner of the editor the floating Find widget occupies. */
+export type FindPlacement = "top" | "bottom";
+
 /** CodeMirror owns query, matching, selection, replacement, and panel lifetime. */
 export class FileFindModel {
   private view: EditorView | null = null;
   private listeners = new Set<() => void>();
   private matches: Array<{ from: number; to: number }> = [];
+  private widget: HTMLElement | null = null;
+  private widgetResize: ResizeObserver | null = null;
   private snapshot = {
-    panel: null as HTMLElement | null,
+    open: false,
+    placement: "top" as FindPlacement,
     query: "",
     replacement: "",
     current: 0,
@@ -39,22 +45,14 @@ export class FileFindModel {
   readonly getSnapshot = () => this.snapshot;
 
   readonly extension: Extension = [
-    EditorView.theme({
-      // CodeMirror lays panels out as flex siblings of the scroller, which pushes
-      // the first lines down every time Find opens. Take the panel out of flow so
-      // the widget floats over the top-right of the content instead.
-      ".cm-panels.cm-panels-top": {
-        position: "absolute",
-        top: "0",
-        right: "0",
-        left: "auto",
-        maxWidth: "100%",
-        zIndex: "4",
-        border: "none",
-        backgroundColor: "transparent",
-      },
-      // The custom panel lives inside the editor's monospace subtree.
-      ".paseo-file-find, .paseo-file-find *": { fontFamily: "var(--paseo-ui-font)" },
+    // The widget floats over the editor as a sibling overlay, so CodeMirror's own
+    // panel slot stays empty and contributes no layout or scroll margin of its own.
+    EditorView.theme({ ".cm-panels": { display: "none" } }),
+    // Reveal matches clear of the widget instead of underneath it.
+    EditorView.scrollMargins.of((view) => {
+      const clearance = this.clearance(view);
+      if (!clearance) return null;
+      return this.snapshot.placement === "top" ? { top: clearance } : { bottom: clearance };
     }),
     search({ literal: true, top: true, createPanel: (view) => this.createPanel(view) }),
     EditorState.transactionExtender.of((transaction) => {
@@ -108,6 +106,21 @@ export class FileFindModel {
     });
   }
 
+  /**
+   * The widget renders outside CodeMirror, so the editor cannot see it. Handing the
+   * node here lets this model — which already owns reveal — measure the obstruction.
+   */
+  readonly setWidgetNode = (node: HTMLElement | null) => {
+    if (this.widget === node) return;
+    this.widgetResize?.disconnect();
+    this.widgetResize = null;
+    this.widget = node;
+    if (!node) return;
+    this.widgetResize = new ResizeObserver(() => this.reposition());
+    this.widgetResize.observe(node);
+    this.reposition();
+  };
+
   private createPanel(view: EditorView): Panel {
     this.view = view;
     const dom = document.createElement("div");
@@ -116,19 +129,88 @@ export class FileFindModel {
       dom,
       top: true,
       mount: () => {
-        this.snapshot = { ...this.snapshot, panel: dom };
+        this.snapshot = { ...this.snapshot, open: true, placement: "top" };
         this.update(view, true);
       },
       update: (update: ViewUpdate) => {
         const queryChanged = !getSearchQuery(update.startState).eq(getSearchQuery(update.state));
-        if (update.docChanged || update.selectionSet || queryChanged)
+        if (
+          update.docChanged ||
+          update.selectionSet ||
+          queryChanged ||
+          update.geometryChanged ||
+          update.viewportChanged
+        )
           this.update(view, update.docChanged || queryChanged);
       },
       destroy: () => {
-        this.snapshot = { ...this.snapshot, panel: null };
+        this.snapshot = { ...this.snapshot, open: false, placement: "top" };
         this.publish();
       },
     };
+  }
+
+  /** Vertical space the widget takes out of the editor, including its inset. */
+  private clearance(view: EditorView): number {
+    const widget = this.widget;
+    if (!widget || !this.snapshot.open) return 0;
+    const box = widget.getBoundingClientRect();
+    if (!box.height) return 0;
+    const editor = view.scrollDOM.getBoundingClientRect();
+    const clearance =
+      this.snapshot.placement === "top" ? box.bottom - editor.top : editor.bottom - box.top;
+    return Math.max(0, clearance);
+  }
+
+  /**
+   * Move the widget to the opposite corner when it sits on top of the active match
+   * and the editor has no scroll range left to reveal it. Placement only changes
+   * when the current corner collides, so navigating matches never makes it bounce.
+   *
+   * Measurement runs through `requestMeasure` because CodeMirror refuses layout
+   * reads while an update is in progress, and every caller here sits inside one.
+   */
+  private reposition() {
+    const view = this.view;
+    if (!view || !this.widget || !this.snapshot.open) return;
+    view.requestMeasure<FindPlacement>({
+      key: this,
+      read: () => this.measurePlacement(view),
+      write: (placement) => {
+        if (placement === this.snapshot.placement) return;
+        this.snapshot = { ...this.snapshot, placement };
+        this.publish();
+      },
+    });
+  }
+
+  private measurePlacement(view: EditorView): FindPlacement {
+    const current = this.snapshot.placement;
+    const widget = this.widget;
+    if (!widget) return current;
+    const selection = view.state.selection.main;
+    if (selection.empty) return current;
+    const from = view.coordsAtPos(selection.from);
+    const to = view.coordsAtPos(selection.to);
+    if (!from || !to) return current;
+    const clearance = this.clearance(view);
+    if (!clearance) return current;
+    const box = widget.getBoundingClientRect();
+    const editor = view.scrollDOM.getBoundingClientRect();
+    const match = {
+      top: Math.min(from.top, to.top),
+      bottom: Math.max(from.bottom, to.bottom),
+      right: Math.max(from.right, to.right),
+    };
+    const hits = (placement: FindPlacement) => {
+      if (match.right <= box.left) return false;
+      return placement === "top"
+        ? match.top < editor.top + clearance && match.bottom > editor.top
+        : match.bottom > editor.bottom - clearance && match.top < editor.bottom;
+    };
+    if (!hits(current)) return current;
+    const other: FindPlacement = current === "top" ? "bottom" : "top";
+    return hits(other) ? current : other;
   }
 
   private update(view: EditorView, recount: boolean) {
@@ -163,6 +245,7 @@ export class FileFindModel {
       readOnly: view.state.readOnly,
     };
     this.publish();
+    this.reposition();
   }
 
   private publish() {

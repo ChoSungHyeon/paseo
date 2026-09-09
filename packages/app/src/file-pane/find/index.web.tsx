@@ -6,15 +6,10 @@ import {
   useSyncExternalStore,
   type RefObject,
 } from "react";
-import { createPortal } from "react-dom";
 import { EditorView } from "@codemirror/view";
-import { Search } from "lucide-react-native";
-import { View } from "react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { View, type View as ViewInstance } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
-import { paneContentToolbarIconSize, ToolbarButton } from "@/components/ui/pane-content-toolbar";
-import { useIsCompactFormFactor } from "@/constants/layout";
 import { PaneFind, type PaneFindHandle } from "@/pane-find";
 import { usePaneFocus } from "@/panels/pane-context";
 import { hasActiveWebOverlay } from "@/lib/overlay-root";
@@ -23,8 +18,6 @@ import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { FileFindModel } from "./model.web";
 
 export { FileFindModel } from "./model.web";
-
-const SearchIcon = withUnistyles(Search, mutedIconColorMapping);
 
 export function FileFind({
   model,
@@ -35,16 +28,14 @@ export function FileFind({
 }) {
   const { t } = useTranslation();
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
-  const isCompact = useIsCompactFormFactor();
   const widget = useRef<PaneFindHandle>(null);
-  const { isInteractive, focusPane } = usePaneFocus();
+  const { isInteractive } = usePaneFocus();
   const active = useRetainedPanelActive();
-  const open = useCallback(() => {
-    focusPane();
-    model.open(editor.current);
-    widget.current?.focus();
-  }, [editor, focusPane, model]);
-
+  // RN Web hands the underlying DOM element to a View ref; the model measures it.
+  const setWidgetNode = useCallback(
+    (node: ViewInstance | null) => model.setWidgetNode(node as unknown as HTMLElement | null),
+    [model],
+  );
   useEffect(() => {
     if (!isInteractive || !active) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -77,14 +68,7 @@ export function FileFind({
           },
     [model, state.readOnly, state.replacement],
   );
-  if (!state.panel)
-    return (
-      <View style={styles.trigger}>
-        <ToolbarButton label={t("paneFind.title")} compact={isCompact} onPress={open}>
-          <SearchIcon size={paneContentToolbarIconSize(isCompact)} />
-        </ToolbarButton>
-      </View>
-    );
+  if (!state.open) return null;
   const total = `${state.total}${state.limited ? "+" : ""}`;
   let status = "";
   if (state.query) {
@@ -92,37 +76,40 @@ export function FileFind({
     else if (state.current) status = t("paneFind.position", { current: state.current, total });
     else status = t("paneFind.total", { total });
   }
-  return createPortal(
-    <View style={styles.panel}>
-      <PaneFind
-        ref={widget}
-        query={state.query}
-        status={status}
-        canNavigate={state.total > 0}
-        onQueryChange={model.setSearch}
-        onNext={model.next}
-        onPrevious={model.previous}
-        onClose={model.close}
-        replace={replace}
-      />
-    </View>,
-    state.panel,
+  return (
+    <View
+      style={[styles.overlay, state.placement === "top" ? styles.overlayTop : styles.overlayBottom]}
+      pointerEvents="box-none"
+    >
+      <View ref={setWidgetNode} style={styles.widget}>
+        <PaneFind
+          ref={widget}
+          query={state.query}
+          status={status}
+          canNavigate={state.total > 0}
+          onQueryChange={model.setSearch}
+          onNext={model.next}
+          onPrevious={model.previous}
+          onClose={model.close}
+          replace={replace}
+        />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
-  panel: { alignItems: "flex-end", maxWidth: "100%", padding: theme.spacing[2] },
-  // Carries the open widget's chrome so the entry point reads as the same object.
-  trigger: {
+  // The widget floats over the content; the model flips the corner when it would
+  // otherwise sit on top of the active match.
+  overlay: {
     position: "absolute",
-    top: theme.spacing[2],
+    left: theme.spacing[2],
     right: theme.spacing[2],
+    alignItems: "flex-end",
     zIndex: 1,
-    padding: theme.spacing[1],
-    backgroundColor: theme.colors.surface1,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    ...theme.shadow.md,
   },
+  // Bounds the widget to the pane; PaneFind's own maxWidth resolves against this.
+  widget: { maxWidth: "100%" },
+  overlayTop: { top: theme.spacing[2] },
+  overlayBottom: { bottom: theme.spacing[2] },
 }));
