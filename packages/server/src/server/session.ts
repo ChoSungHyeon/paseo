@@ -1,5 +1,5 @@
 import type { SessionEventSubscription } from "@getpaseo/protocol/messages";
-import type { AgentRequests } from "./agent/requests/index.js";
+import { AgentRequestError, type AgentRequests } from "./agent/requests/index.js";
 import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
@@ -3671,7 +3671,10 @@ export class Session {
     signal?: AbortSignal,
   ): Promise<string | null> {
     if (!signal?.aborted || !agentId) return agentId;
+    beginAgentDeleteIfSupported(this.agentStorage, agentId);
     await this.agentManager.closeAgent(agentId);
+    await this.agentManager.flush();
+    await this.agentStorage.remove(agentId);
     await this.agentManager.deleteAgentState(agentId);
     return null;
   }
@@ -7656,7 +7659,8 @@ export class Session {
     const abort = () => {
       if (this.agentManager.getAgent(resolved.agentId)) {
         cancellation ??= this.agentManager.cancelAgentRun(resolved.agentId).then((result) => {
-          if (result.status === "refused") throw new Error("agent_request_outcome_unknown");
+          if (result.status === "refused")
+            throw new AgentRequestError("agent_request_outcome_unknown");
           return result;
         });
         void cancellation.catch(() => undefined);

@@ -1,3 +1,4 @@
+import { AgentRequests } from "./agent/requests/index.js";
 import { createAgentRequestsStub } from "./test-utils/session-stubs.js";
 import { execFileSync } from "node:child_process";
 import {
@@ -930,6 +931,126 @@ test("client heartbeat clears attention for the focused terminal", async () => {
     focusedTerminalId: "terminal-1",
     appVisible: true,
   });
+});
+
+test("expiry after agent registration removes its durable record before creation can retry", async () => {
+  const workdir = mkdtempSync(path.join(tmpdir(), "paseo-canceled-create-"));
+  const logger = createTestLogger();
+  const agentStorage = new AgentStorage(path.join(workdir, "agents"), logger);
+  const agentManager = new AgentManager({
+    clients: { codex: new CreateAgentTestClient() },
+    registry: agentStorage,
+    logger,
+  });
+  const projectRegistry = new FileBackedProjectRegistry(
+    path.join(workdir, "projects.json"),
+    logger,
+  );
+  const workspaceRegistry = new FileBackedWorkspaceRegistry(
+    path.join(workdir, "workspaces.json"),
+    logger,
+  );
+  let expire!: () => void;
+  const requests = new AgentRequests(path.join(workdir, "requests"), {
+    now: () => 0,
+    schedule(callback) {
+      expire = callback;
+      return () => {};
+    },
+  });
+  let registeredId: string | undefined;
+  const unsubscribe = agentManager.subscribe(
+    (event) => {
+      if (event.type === "agent_state" && registeredId === undefined) {
+        registeredId = event.agent.id;
+        expire();
+      }
+    },
+    { replayState: false },
+  );
+  try {
+    const emitted: SessionOutboundMessage[] = [];
+    const session = asTestSession(
+      new Session({
+        agentRequests: requests,
+        clientId: "test-client",
+        serverId: "test-server",
+        permissions: OWNER_PERMISSIONS,
+        appVersion: null,
+        onMessage: (message) => emitted.push(message),
+        logger: asSessionLogger(logger),
+        downloadTokenStore: asDownloadTokenStore(),
+        pushNotifications: asPushNotifications(),
+        paseoHome: path.join(workdir, "paseo-home"),
+        agentManager,
+        agentStorage,
+        projectRegistry,
+        workspaceRegistry,
+        scheduleService: asScheduleService(),
+        checkoutDiffManager: asCheckoutDiffManager({
+          subscribe: async () => ({
+            initial: { cwd: workdir, files: [], error: null },
+            unsubscribe: () => {},
+          }),
+          scheduleRefreshForCwd: () => {},
+          onWorkspaceStateMayHaveChanged: () => {},
+          invalidateForge: () => {},
+          getMetrics: () => ({
+            checkoutDiffTargetCount: 0,
+            checkoutDiffSubscriptionCount: 0,
+            checkoutDiffWatcherCount: 0,
+            checkoutDiffFallbackRefreshTargetCount: 0,
+          }),
+          dispose: () => {},
+        }),
+        workspaceGitService: createNoopWorkspaceGitService(),
+        daemonConfigStore: asDaemonConfigStore({
+          get: () => ({ mcp: { injectIntoAgents: false }, providers: {} }),
+          onChange: () => () => {},
+        }),
+        mcpBaseUrl: null,
+        stt: null,
+        tts: null,
+        providerSnapshotManager: createProviderSnapshotManagerStub().manager,
+        terminalManager: null,
+      }),
+    );
+
+    await session.handleMessage({
+      type: "create_agent_request",
+      requestId: "canceled",
+      idempotencyKey: "conversation",
+      operation: { key: "arrival", deadlineAt: "2026-09-09T00:00:00Z" },
+      config: { provider: "codex", cwd: workdir },
+    });
+    await requests.cancelAndSettle("arrival");
+    expect(registeredId).toEqual(expect.any(String));
+    expect(agentManager.listAgents()).toEqual([]);
+    expect(await agentStorage.list()).toEqual([]);
+    expect(await requests.inspectOperation("arrival", "conversation")).toEqual({
+      outcome: "settled",
+      agentId: null,
+    });
+    unsubscribe();
+    await session.handleMessage({
+      type: "create_agent_request",
+      requestId: "retry",
+      idempotencyKey: "conversation",
+      operation: { key: "next", deadlineAt: "2026-09-09T00:00:00Z" },
+      config: { provider: "codex", cwd: workdir },
+    });
+    expect(agentManager.listAgents()).toHaveLength(1);
+    expect(
+      emitted.filter(
+        (message) => message.type === "status" && message.payload.status === "agent_created",
+      ),
+    ).toHaveLength(1);
+  } finally {
+    unsubscribe();
+    await Promise.all(agentManager.listAgents().map((agent) => agentManager.closeAgent(agent.id)));
+    await agentManager.flush();
+    rmSync(workdir, { recursive: true, force: true });
+  }
 });
 
 test("create_agent_request keeps requested child cwd when grouped under an existing parent workspace", async () => {

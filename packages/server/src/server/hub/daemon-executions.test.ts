@@ -333,13 +333,8 @@ test("control cancels a held legacy provider create and fences a delayed replay"
   hub.beginOwnedCreate("held-create", "expired-create");
   await hub.agentCreationAttempts(1);
   const creation = hub.ownedCreateResult("held-create");
-  let settled = false;
-  const control = hub.controlExecution("expired-create", "archive").then((result) => {
-    settled = true;
-    return result;
-  });
+  const control = hub.controlExecution("expired-create", "archive");
   try {
-    await expect.poll(() => settled, { timeout: 500 }).toBe(true);
     expect(await control).toMatchObject({ success: true });
     expect(await creation).toMatchObject({ payload: { success: false } });
   } finally {

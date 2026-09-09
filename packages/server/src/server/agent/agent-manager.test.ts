@@ -1499,7 +1499,8 @@ test("canceling provider startup settles creation and closes a late session with
   await client.waitForCreationToStart();
   try {
     controller.abort(new Error("startup expired"));
-    await expect.poll(() => outcome, { timeout: 500 }).toBe("canceled");
+    await creation;
+    expect(outcome).toBe("canceled");
     client.finishCreating();
     await expect.poll(() => client.createdSessionClosed).toBe(true);
     expect(manager.listAgents()).toEqual([]);

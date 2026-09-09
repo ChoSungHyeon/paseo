@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "vitest";
-import { AgentRequests } from "./index.js";
+import { AgentRequests, AgentRequestError } from "./index.js";
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -233,8 +233,8 @@ test("a reconstructed journal reports interrupted startup as unknown and never l
     restarted.run(context, async () => "must not launch"),
   ]);
   expect(replays).toEqual([
-    { status: "rejected", reason: new Error("agent_request_outcome_unknown") },
-    { status: "rejected", reason: new Error("agent_request_outcome_unknown") },
+    { status: "rejected", reason: new AgentRequestError("agent_request_outcome_unknown") },
+    { status: "rejected", reason: new AgentRequestError("agent_request_outcome_unknown") },
   ]);
   expect(await restarted.cancelOperation(context.key, "conversation")).toEqual({
     agentId: null,
@@ -248,21 +248,36 @@ test("a reconstructed journal reports interrupted startup as unknown and never l
 });
 
 test("a live deadline settles a hung waiter without a cancel frame and preserves late cleanup", async () => {
-  const { requests } = await fixture();
+  const { directory } = await fixture();
+  let expire!: () => void;
+  const now = Date.parse("2026-09-09T00:00:00Z");
+  const requests = new AgentRequests(directory, {
+    now: () => now,
+    schedule(callback, delayMs) {
+      expect(delayMs).toBe(120_000);
+      expire = callback;
+      return () => {};
+    },
+  });
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  let entered = false;
+  let enter!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve;
+  });
   const pending = requests.run(
-    { key: "deadline", deadlineAt: new Date(Date.now() + 200).toISOString() },
+    { key: "deadline", deadlineAt: new Date(now + 120_000).toISOString() },
     async () => {
-      entered = true;
+      enter();
       await gate;
     },
   );
-  await expect(pending).rejects.toThrow("agent_request_canceled");
-  expect(entered).toBe(true);
+  const rejected = expect(pending).rejects.toThrow("agent_request_canceled");
+  await entered;
+  expire();
+  await rejected;
   expect(await requests.inspectOperation("deadline", "conversation")).toMatchObject({
     outcome: "pending",
   });
@@ -270,9 +285,10 @@ test("a live deadline settles a hung waiter without a cancel frame and preserves
     "agent_request_canceled",
   );
   release();
-  await expect
-    .poll(() => requests.inspectOperation("deadline", "conversation"))
-    .toMatchObject({ outcome: "settled" });
+  await requests.cancelAndSettle("deadline");
+  expect(await requests.inspectOperation("deadline", "conversation")).toMatchObject({
+    outcome: "settled",
+  });
   expect(await requests.run({ key: "next" }, async () => "ready")).toBe("ready");
 });
 
@@ -325,7 +341,7 @@ test("refused provider cancellation remains unknown after restart", async () => 
   const { requests, directory } = await fixture();
   await expect(
     requests.run({ key: "refused" }, async () => {
-      throw new Error("agent_request_outcome_unknown");
+      throw new AgentRequestError("agent_request_outcome_unknown");
     }),
   ).rejects.toThrow("agent_request_outcome_unknown");
   expect(

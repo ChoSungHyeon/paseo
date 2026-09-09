@@ -81,7 +81,7 @@ export function createWorkspaceRecoveryService(deps: {
         message: "This workspace is no longer known to the host.",
       };
     }
-    if (!workspace.archivedAt) {
+    if (!workspace.archivedAt && (await deps.isDirectory(workspace.cwd))) {
       return {
         kind: "unavailable",
         workspaceId,
@@ -90,6 +90,14 @@ export function createWorkspaceRecoveryService(deps: {
       };
     }
 
+    if (!workspace.archivedAt) {
+      return {
+        kind: "unavailable",
+        workspaceId,
+        reason: "workspace_directory_missing",
+        message: "The workspace directory no longer exists.",
+      };
+    }
     const project = await deps.getProject(workspace.projectId);
     if (!project) {
       return {
@@ -154,7 +162,7 @@ export function createWorkspaceRecoveryService(deps: {
     }
 
     if (resolved.kind === "restore") {
-      await recreateArchivedWorktree(resolved.workspace, resolved.sourceRepoRoot);
+      await recreateArchivedWorktree(resolved.workspace, resolved.sourceRepoRoot, signal);
     }
     signal?.throwIfAborted();
     await deps.unarchiveWorkspace(resolved.workspace);
@@ -164,6 +172,7 @@ export function createWorkspaceRecoveryService(deps: {
   async function recreateArchivedWorktree(
     workspace: PersistedWorkspaceRecord,
     sourceRepoRoot: string,
+    signal?: AbortSignal,
   ): Promise<void> {
     const branch = workspace.branch;
     if (!branch) {
@@ -208,6 +217,7 @@ export function createWorkspaceRecoveryService(deps: {
     }
 
     try {
+      signal?.throwIfAborted();
       const recreatedWorkspacePath = mapWorkspaceCwdToWorktree({
         sourceWorktreePath: previousWorktreePath,
         workspaceCwd: workspace.cwd,
@@ -225,6 +235,7 @@ export function createWorkspaceRecoveryService(deps: {
           message: `Selected project directory is missing from the restored worktree: ${recreatedWorkspacePath}`,
         });
       }
+      signal?.throwIfAborted();
     } catch (error) {
       return rollbackCreatedPaseoWorktree(
         {

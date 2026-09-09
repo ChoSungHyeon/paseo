@@ -11,6 +11,30 @@ const ReceiptSchema = z.object({
 });
 type Receipt = z.infer<typeof ReceiptSchema>;
 
+export class AgentRequestError extends Error {
+  constructor(
+    public readonly code:
+      | "agent_request_canceled"
+      | "agent_request_outcome_unknown"
+      | "agent_request_key_conflict",
+  ) {
+    super(code);
+    this.name = "AgentRequestError";
+  }
+}
+
+interface RequestClock {
+  now(): number;
+  schedule(callback: () => void, delayMs: number): () => void;
+}
+const systemClock: RequestClock = {
+  now: () => Date.now(),
+  schedule(callback, delayMs) {
+    const timer = setTimeout(callback, delayMs);
+    return () => clearTimeout(timer);
+  },
+};
+
 /** One daemon-owned request journal, shared by all of its socket sessions. */
 export class AgentRequests {
   private readonly pending = new Map<string, Promise<unknown>>();
@@ -20,7 +44,10 @@ export class AgentRequests {
   >();
   private readonly operationWrites = new Map<string, Promise<void>>();
 
-  constructor(private readonly directory: string) {}
+  constructor(
+    private readonly directory: string,
+    private readonly clock: RequestClock = systemClock,
+  ) {}
 
   /** Runtime cancellation belongs to the same journal as idempotent create/send receipts. */
   async run<T>(
@@ -37,7 +64,7 @@ export class AgentRequests {
         initialized: (async () => {
           await previousWrite;
           if (await this.wasInterrupted(context.key))
-            throw new Error("agent_request_outcome_unknown");
+            throw new AgentRequestError("agent_request_outcome_unknown");
         })(),
       };
       this.operations.set(context.key, active);
@@ -46,23 +73,28 @@ export class AgentRequests {
     const controller = new AbortController();
     const controllers = active.controllers;
     controllers.add(controller);
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let clearTimer: (() => void) | undefined;
     let abort: (() => void) | undefined;
     let started = false;
     let recorded = false;
     try {
       await active.initialized;
       const remaining =
-        context.deadlineAt === undefined ? undefined : Date.parse(context.deadlineAt) - Date.now();
+        context.deadlineAt === undefined
+          ? undefined
+          : Date.parse(context.deadlineAt) - this.clock.now();
       if (
         (remaining !== undefined && (!Number.isFinite(remaining) || remaining <= 0)) ||
         (await this.wasCanceled(context.key))
       ) {
-        throw new Error("agent_request_canceled");
+        throw new AgentRequestError("agent_request_canceled");
       }
       controller.signal.throwIfAborted();
       if (remaining !== undefined)
-        timer = setTimeout(() => controller.abort(new Error("agent_request_canceled")), remaining);
+        clearTimer = this.clock.schedule(
+          () => controller.abort(new AgentRequestError("agent_request_canceled")),
+          remaining,
+        );
       await this.recordOperationState(context.key);
       recorded = true;
       controller.signal.throwIfAborted();
@@ -76,7 +108,7 @@ export class AgentRequests {
           return operation(controller.signal);
         })
         .catch((error: unknown) => {
-          if (error instanceof Error && error.message === "agent_request_outcome_unknown")
+          if (error instanceof AgentRequestError && error.code === "agent_request_outcome_unknown")
             operationState.unknown = true;
           throw error;
         })
@@ -96,7 +128,7 @@ export class AgentRequests {
         }),
       ]);
     } finally {
-      clearTimeout(timer);
+      clearTimer?.();
       if (abort) controller.signal.removeEventListener("abort", abort);
       if (controller.signal.aborted) await this.recordCancellation(context.key);
       if (!started) {
@@ -111,7 +143,7 @@ export class AgentRequests {
     // Persist before acknowledging: a delayed request or a new socket must also be fenced.
     await this.recordCancellation(key);
     for (const controller of this.operations.get(key)?.controllers ?? []) {
-      controller.abort(new Error("agent_request_canceled"));
+      controller.abort(new AgentRequestError("agent_request_canceled"));
     }
   }
 
@@ -131,7 +163,8 @@ export class AgentRequests {
         const receipt = z
           .object({ fingerprint: z.string() })
           .parse(JSON.parse(await readFile(file, "utf8")));
-        if (receipt.fingerprint !== fingerprint) throw new Error("agent_request_key_conflict");
+        if (receipt.fingerprint !== fingerprint)
+          throw new AgentRequestError("agent_request_key_conflict");
         return;
       } catch (error) {
         if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
@@ -145,7 +178,8 @@ export class AgentRequests {
     await this.cancel(key);
     await this.pending.get(digest(["operation", key]))?.catch(() => undefined);
     await this.operationWrites.get(key);
-    if (await this.wasInterrupted(key)) throw new Error("agent_request_outcome_unknown");
+    if (await this.wasInterrupted(key))
+      throw new AgentRequestError("agent_request_outcome_unknown");
   }
 
   async cancelOperation(
@@ -297,10 +331,11 @@ export class AgentRequests {
     const file = path.join(this.directory, `${key}.json`);
     const existing = await readReceipt(file);
     if (existing) {
-      if (existing.fingerprint !== fingerprint) throw new Error("agent_request_key_conflict");
+      if (existing.fingerprint !== fingerprint)
+        throw new AgentRequestError("agent_request_key_conflict");
       if (existing.state === "completed") return existing.agentId;
       if (!(await operation.recover(existing.agentId))) {
-        throw new Error("agent_request_outcome_unknown");
+        throw new AgentRequestError("agent_request_outcome_unknown");
       }
       await writeJsonFileAtomic(file, { ...existing, state: "completed" });
       return existing.agentId;

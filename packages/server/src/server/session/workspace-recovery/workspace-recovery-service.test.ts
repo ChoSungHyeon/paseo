@@ -119,12 +119,70 @@ describe("workspace recovery", () => {
 
   test("a repeated restore of an already active workspace succeeds without another unarchive", async () => {
     const workspace = createWorkspace({ archivedAt: null });
-    const { service, unarchived } = createHarness({ workspace });
+    const { service, unarchived } = createHarness({ workspace, directories: [workspace.cwd] });
     await expect(service.restore(workspace.workspaceId)).resolves.toEqual({
       workspaceId: workspace.workspaceId,
       action: "unarchive",
     });
     expect(unarchived).toEqual([]);
+  });
+
+  test("an active workspace with a missing directory cannot report a successful restore", async () => {
+    const workspace = createWorkspace({ archivedAt: null });
+    const { service, unarchived } = createHarness({ workspace });
+    await expect(service.restore(workspace.workspaceId)).rejects.toThrow();
+    expect(unarchived).toEqual([]);
+  });
+
+  test("expiry after filesystem recreation rolls back the new checkout", async () => {
+    const { tempDir, repoDir } = createGitRepository();
+    const branch = "feature/canceled-restore";
+    execFileSync("git", ["branch", branch], { cwd: repoDir, stdio: "pipe" });
+    const paseoHome = join(tempDir, "paseo-home");
+    const worktreesRoot = join(tempDir, "worktrees");
+    const created = await createWorktree({
+      cwd: repoDir,
+      worktreeSlug: "canceled-restore",
+      source: { kind: "checkout-branch", branchName: branch },
+      runSetup: false,
+      paseoHome,
+      worktreesRoot,
+    });
+    const worktreeRoot = realpathSync(created.worktreePath);
+    rmSync(worktreeRoot, { recursive: true, force: true });
+    const workspace = createWorkspace({
+      cwd: worktreeRoot,
+      branch,
+      worktreeRoot,
+      mainRepoRoot: repoDir,
+    });
+    const controller = new AbortController();
+    let unarchived = false;
+    const service = createWorkspaceRecoveryService({
+      paseoHome,
+      worktreesRoot,
+      getWorkspace: async () => workspace,
+      getProject: async () => createProject({ rootPath: repoDir }),
+      isDirectory: async (target) => {
+        const exists = existsSync(target) && statSync(target).isDirectory();
+        if (target === worktreeRoot && exists) controller.abort(new Error("expired"));
+        return exists;
+      },
+      unarchiveWorkspace: async () => {
+        unarchived = true;
+      },
+    });
+    await expect(service.restore(workspace.workspaceId, controller.signal)).rejects.toThrow(
+      "expired",
+    );
+    expect(unarchived).toBe(false);
+    expect(existsSync(worktreeRoot)).toBe(false);
+    expect(
+      execFileSync("git", ["worktree", "list", "--porcelain"], {
+        cwd: repoDir,
+        stdio: "pipe",
+      }).toString(),
+    ).not.toContain(worktreeRoot);
   });
 
   test("expiry during restore preparation cannot unarchive the workspace", async () => {
