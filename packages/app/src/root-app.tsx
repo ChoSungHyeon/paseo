@@ -13,6 +13,10 @@ const { ctx: context } = require("expo-router/_ctx") as {
 };
 
 export function RootApp() {
+  return <RootRouter context={context} />;
+}
+
+export function RootRouter({ context: routes }: Pick<ComponentProps<typeof ExpoRoot>, "context">) {
   const [generation, setGeneration] = useState(0);
   const reload = useCallback(() => setGeneration((value) => value + 1), []);
 
@@ -24,7 +28,7 @@ export function RootApp() {
             <Head.Provider>
               {/* Recreate the router at a safe destination before a failed route can mount. */}
               <ExpoRoot
-                context={context}
+                context={routes}
                 location={generation === 0 ? undefined : "/open-project"}
               />
             </Head.Provider>
