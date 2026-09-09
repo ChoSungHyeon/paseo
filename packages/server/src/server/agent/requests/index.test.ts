@@ -141,3 +141,194 @@ test("failed local message preparation does not leave an ambiguous receipt", asy
   await requests.send(input);
   expect(sends).toBe(1);
 });
+
+test("canceling startup rejects its waiter and fences later phases and retries", async () => {
+  const { requests, directory } = await fixture();
+  const context = { key: "arrival", deadlineAt: new Date(Date.now() + 60_000).toISOString() };
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const pending = requests.run(context, async (signal) => {
+    if (!signal) throw new Error("missing operation signal");
+    entered();
+    await new Promise<void>((_, reject) =>
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true }),
+    );
+  });
+  const failed = expect(pending).rejects.toThrow("agent_request_canceled");
+  await started;
+  await requests.cancel(context.key);
+  await failed;
+  let sent = false;
+  await expect(
+    new AgentRequests(directory).run(context, async () => {
+      sent = true;
+    }),
+  ).rejects.toThrow("agent_request_canceled");
+  expect(sent).toBe(false);
+  expect(await requests.run({ ...context, key: "other-arrival" }, async () => "ok")).toBe("ok");
+});
+
+test("an expired startup deadline cannot launch even without a cancel frame", async () => {
+  const { requests } = await fixture();
+  let launched = false;
+  await expect(
+    requests.run({ key: "expired", deadlineAt: "2000-01-01T00:00:00.000Z" }, async () => {
+      launched = true;
+    }),
+  ).rejects.toThrow("agent_request_canceled");
+  expect(launched).toBe(false);
+});
+
+test("a noncooperative operation leaves explicit pending cleanup without trapping cancel callers", async () => {
+  const { requests } = await fixture();
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const pending = requests.run(
+    { key: "hung", deadlineAt: new Date(Date.now() + 60_000).toISOString() },
+    async () => {
+      entered();
+      await gate;
+    },
+  );
+  const failed = expect(pending).rejects.toThrow("agent_request_canceled");
+  await started;
+  expect(await requests.cancelOperation("hung", "conversation")).toEqual({
+    agentId: null,
+    outcome: "pending",
+  });
+  await failed;
+  release();
+  await expect
+    .poll(() => requests.cancelOperation("hung", "conversation"))
+    .toEqual({ agentId: null, outcome: "settled" });
+});
+
+test("a reconstructed journal reports interrupted startup as unknown and never launches a canceled phase", async () => {
+  const { requests, directory } = await fixture();
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const context = { key: "interrupted", deadlineAt: new Date(Date.now() + 60_000).toISOString() };
+  const pending = requests.run(context, async () => {
+    entered();
+    await gate;
+  });
+  await started;
+  const restarted = new AgentRequests(directory);
+  const replays = await Promise.allSettled([
+    restarted.run(context, async () => "must not launch"),
+    restarted.run(context, async () => "must not launch"),
+  ]);
+  expect(replays).toEqual([
+    { status: "rejected", reason: new Error("agent_request_outcome_unknown") },
+    { status: "rejected", reason: new Error("agent_request_outcome_unknown") },
+  ]);
+  expect(await restarted.cancelOperation(context.key, "conversation")).toEqual({
+    agentId: null,
+    outcome: "unknown",
+  });
+  await expect(restarted.run(context, async () => "must not run")).rejects.toThrow(
+    "agent_request_outcome_unknown",
+  );
+  release();
+  await pending;
+});
+
+test("a live deadline settles a hung waiter without a cancel frame and preserves late cleanup", async () => {
+  const { requests } = await fixture();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered = false;
+  const pending = requests.run(
+    { key: "deadline", deadlineAt: new Date(Date.now() + 200).toISOString() },
+    async () => {
+      entered = true;
+      await gate;
+    },
+  );
+  await expect(pending).rejects.toThrow("agent_request_canceled");
+  expect(entered).toBe(true);
+  expect(await requests.inspectOperation("deadline", "conversation")).toMatchObject({
+    outcome: "pending",
+  });
+  await expect(requests.run({ key: "deadline" }, async () => "must not launch")).rejects.toThrow(
+    "agent_request_canceled",
+  );
+  release();
+  await expect
+    .poll(() => requests.inspectOperation("deadline", "conversation"))
+    .toMatchObject({ outcome: "settled" });
+  expect(await requests.run({ key: "next" }, async () => "ready")).toBe("ready");
+});
+
+test("retransmitted phases serialize while other operation keys continue", async () => {
+  const { requests } = await fixture();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const order: string[] = [];
+  const first = requests.run({ key: "arrival" }, async () => {
+    order.push("first");
+    entered();
+    await gate;
+    order.push("settled");
+  });
+  await started;
+  const second = requests.run({ key: "arrival" }, async () => {
+    order.push("second");
+  });
+  await requests.run({ key: "other" }, async () => {
+    order.push("other");
+  });
+  expect(order).toEqual(["first", "other"]);
+  release();
+  await Promise.all([first, second]);
+  expect(order).toEqual(["first", "other", "settled", "second"]);
+});
+
+test("successful control receipts survive restart and reject changed targets", async () => {
+  const { requests, directory } = await fixture();
+  let archives = 0;
+  const action = async () => {
+    archives++;
+  };
+  await requests.control({ key: "cleanup" }, { workspaceId: "one" }, action);
+  const restarted = new AgentRequests(directory);
+  await restarted.control({ key: "cleanup" }, { workspaceId: "one" }, action);
+  expect(archives).toBe(1);
+  await expect(
+    restarted.control({ key: "cleanup" }, { workspaceId: "two" }, action),
+  ).rejects.toThrow("agent_request_key_conflict");
+});
+
+test("refused provider cancellation remains unknown after restart", async () => {
+  const { requests, directory } = await fixture();
+  await expect(
+    requests.run({ key: "refused" }, async () => {
+      throw new Error("agent_request_outcome_unknown");
+    }),
+  ).rejects.toThrow("agent_request_outcome_unknown");
+  expect(
+    await new AgentRequests(directory).inspectOperation("refused", "conversation"),
+  ).toMatchObject({ outcome: "unknown" });
+});

@@ -1477,6 +1477,40 @@ function fakeCodexEmitting(args: FakeCodexEmitterArgs): AgentClient {
 
 const logger = createTestLogger();
 
+test("canceling provider startup settles creation and closes a late session without registering it", async () => {
+  const client = new HeldAgentCreationClient();
+  const manager = new AgentManager({ clients: { codex: client }, logger });
+  const controller = new AbortController();
+  let outcome = "pending";
+  const creation = manager
+    .createAgent({ provider: "codex", cwd: process.cwd() }, undefined, {
+      workspaceId: undefined,
+      signal: controller.signal,
+    })
+    .then(
+      () => {
+        outcome = "created";
+        return;
+      },
+      () => {
+        outcome = "canceled";
+      },
+    );
+  await client.waitForCreationToStart();
+  try {
+    controller.abort(new Error("startup expired"));
+    await expect.poll(() => outcome, { timeout: 500 }).toBe("canceled");
+    client.finishCreating();
+    await expect.poll(() => client.createdSessionClosed).toBe(true);
+    expect(manager.listAgents()).toEqual([]);
+  } finally {
+    client.finishCreating();
+    await creation;
+    manager.prepareForShutdown();
+    await manager.flushForShutdown();
+  }
+});
+
 test("does not register a session that finishes starting after shutdown begins", async () => {
   const client = new HeldAgentCreationClient();
   const manager = new AgentManager({

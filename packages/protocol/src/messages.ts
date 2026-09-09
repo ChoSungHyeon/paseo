@@ -1075,8 +1075,38 @@ export const WorkspaceRecoveryInspectRequestSchema = z.object({
   requestId: z.string(),
 });
 
+const AgentRequestOperationSchema = z.object({
+  key: z.string().min(1).max(512),
+  deadlineAt: z.string().datetime().optional(),
+});
+
+export const AgentRequestsCancelRequestSchema = z.object({
+  type: z.literal("agent.requests.cancel.request"),
+  requestId: z.string(),
+  key: z.string().min(1).max(512),
+  creationKey: z.string().min(1).max(512),
+});
+
+export const AgentRequestsInspectRequestSchema = AgentRequestsCancelRequestSchema.extend({
+  type: z.literal("agent.requests.inspect.request"),
+});
+
+export const AgentRequestsCancelResponseSchema = z.object({
+  type: z.literal("agent.requests.cancel.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string().nullable(),
+    outcome: z.enum(["settled", "pending", "unknown"]),
+  }),
+});
+
+export const AgentRequestsInspectResponseSchema = AgentRequestsCancelResponseSchema.extend({
+  type: z.literal("agent.requests.inspect.response"),
+});
+
 export const WorkspaceRecoveryRestoreRequestSchema = z.object({
   type: z.literal("workspace.recovery.restore.request"),
+  operation: AgentRequestOperationSchema.optional(),
   workspaceId: z.string(),
   requestId: z.string(),
 });
@@ -1394,6 +1424,7 @@ export const FetchAgentRequestMessageSchema = z.object({
 
 export const SendAgentMessageRequestSchema = z.object({
   type: z.literal("send_agent_message_request"),
+  operation: AgentRequestOperationSchema.optional(),
   requestId: z.string(),
   /** Accepts full ID, unique prefix, or exact full title (server resolves). */
   agentId: z.string(),
@@ -1680,6 +1711,7 @@ export type CreateAgentWorktreeTarget = z.infer<typeof CreateAgentWorktreeTarget
 
 export const CreateAgentRequestMessageSchema = z.object({
   type: z.literal("create_agent_request"),
+  operation: AgentRequestOperationSchema.optional(),
   // A creation key requires initialPrompt to be sent separately with a stable messageId.
   idempotencyKey: z.string().min(1).max(512).optional(),
   config: AgentSessionConfigSchema,
@@ -1773,6 +1805,7 @@ export const RefreshAgentRequestMessageSchema = z.object({
 
 export const CancelAgentRequestMessageSchema = z.object({
   type: z.literal("cancel_agent_request"),
+  operation: AgentRequestOperationSchema.optional(),
   agentId: z.string(),
   requestId: z.string().optional(),
 });
@@ -2545,6 +2578,7 @@ export const ProjectGithubCloneRequestSchema = z.object({
 
 export const ArchiveWorkspaceRequestSchema = z.object({
   type: z.literal("archive_workspace_request"),
+  operation: AgentRequestOperationSchema.optional(),
   workspaceId: z.string(),
   requestId: z.string(),
 });
@@ -2977,6 +3011,7 @@ export const HubExecutionAgentCreateRequestSchema = z.object({
   type: z.literal("hub.execution.agent.create.request"),
   requestId: z.string(),
   executionId: z.string(),
+  deadlineAt: z.string().datetime().optional(),
   provider: z.string(),
   cwd: z.string(),
   prompt: z.string(),
@@ -3096,6 +3131,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceLabelDeleteInspectRequestSchema,
   WorkspaceRecoveryInspectRequestSchema,
   WorkspaceRecoveryRestoreRequestSchema,
+  AgentRequestsCancelRequestSchema,
+  AgentRequestsInspectRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
@@ -3433,6 +3470,7 @@ export const ServerInfoStatusPayloadSchema = z
       .object({
         // COMPAT(agentRequestReceipts): added in v0.8.0; remove gate after 2027-03-05.
         agentRequestReceipts: z.boolean().optional(),
+        agentRequestCancellation: z.boolean().optional(),
         // COMPAT(hubAgentRpc): added in v0.8.0; remove gate after 2027-03-05.
         hubAgentRpc: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
@@ -6543,6 +6581,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentAttentionRequiredMessageSchema,
   AgentForkContextResponseMessageSchema,
   CancelAgentResponseMessageSchema,
+  AgentRequestsCancelResponseSchema,
+  AgentRequestsInspectResponseSchema,
   ClearAgentAttentionResponseMessageSchema,
   WorkspaceCreateResponseSchema,
   WorkspaceClearAttentionResponseSchema,

@@ -55,6 +55,7 @@ export type EnsureWorkspaceForCreate = (
 
 export interface CreateAgentFromSessionInput {
   kind: "session";
+  signal?: AbortSignal;
   agentId?: string;
   config: AgentSessionConfig;
   workspaceId: string;
@@ -79,6 +80,7 @@ export interface CreateAgentFromSessionInput {
 
 export interface CreateAgentFromMcpInput {
   kind: "mcp";
+  signal?: AbortSignal;
   provider: string;
   title: string;
   initialPrompt?: string;
@@ -180,10 +182,12 @@ export async function createAgentCommand(
       ? await resolveSessionCreateAgent(dependencies, input)
       : await resolveMcpCreateAgent(dependencies, input);
 
+  const signal = input.signal;
+  signal?.throwIfAborted();
   const snapshot = await dependencies.agentManager.createAgent(
     resolved.config,
     input.kind === "session" ? input.agentId : undefined,
-    resolved.createOptions,
+    { ...resolved.createOptions, signal },
   );
 
   resolved.setupContinuation?.startAfterAgentCreate({
@@ -197,7 +201,7 @@ export async function createAgentCommand(
     input.onCreated?.({ agentId: snapshot.id, createdWorktree: resolved.createdWorktree ?? null });
   }
   if (resolved.prompt !== undefined) {
-    const sendResult = await sendInitialPrompt(dependencies, resolved, snapshot);
+    const sendResult = await sendInitialPrompt(dependencies, resolved, snapshot, signal);
     initialPromptStarted = sendResult.started;
     liveSnapshot = sendResult.liveSnapshot;
     initialPromptError = sendResult.error ?? null;
@@ -449,6 +453,7 @@ async function sendInitialPrompt(
   dependencies: CreateAgentCommandDependencies,
   resolved: ResolvedCreateAgent,
   snapshot: ManagedAgent,
+  signal?: AbortSignal,
 ): Promise<{ started: boolean; liveSnapshot: ManagedAgent; error?: unknown }> {
   try {
     const prompt = resolved.prompt;
@@ -458,6 +463,7 @@ async function sendInitialPrompt(
     const liveSnapshot = await startCreatedAgentInitialPrompt({
       agentManager: dependencies.agentManager,
       agentId: snapshot.id,
+      signal,
       snapshot,
       prompt,
       runOptions: resolved.runOptions,

@@ -1,3 +1,4 @@
+import { AgentRequests } from "./agent/requests/index.js";
 import { describeHookWorkspace } from "./plugins/lifecycle/index.js";
 import express from "express";
 import { createServer as createHTTPServer, type IncomingMessage, type ServerResponse } from "http";
@@ -856,6 +857,7 @@ export async function createPaseoDaemon(
     serviceProxyListenTarget = parseListenString(config.serviceProxy.standaloneListen);
   }
 
+  const agentRequests = new AgentRequests(path.join(config.paseoHome, "agent-requests"));
   const agentStorage = new AgentStorage(config.agentStoragePath, logger);
   const projectRegistry = new FileBackedProjectRegistry(
     path.join(config.paseoHome, "projects", "projects.json"),
@@ -1257,6 +1259,7 @@ export async function createPaseoDaemon(
     createExecutionAgents: (daemonId) =>
       new DaemonExecutions({
         daemonId,
+        agentRequests,
         agentManager,
         agentStorage,
         createAgent,
@@ -1717,6 +1720,7 @@ export async function createPaseoDaemon(
               pluginRuntime,
               orchestrationSkills,
               workspaceLabelService,
+              agentRequests,
             );
             pluginRuntime.bindPaseoSessionHost(wsServer);
             await pluginRuntime.start();

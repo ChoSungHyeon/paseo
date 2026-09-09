@@ -278,6 +278,7 @@ type ProviderEnabledMap = Partial<Record<AgentProvider, ProviderEnabledFlag>>;
 type ProviderClientMap = Partial<Record<AgentProvider, AgentClient>>;
 
 export interface CreateAgentOptions {
+  signal?: AbortSignal;
   labels?: Record<string, string>;
   initialPrompt?: string;
   env?: Record<string, string>;
@@ -1227,8 +1228,16 @@ export class AgentManager {
     );
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const createOptions = this.buildCreateSessionOptions(options);
-    const session = await client.createSession(providerLaunchConfig, launchContext, createOptions);
+    options.signal?.throwIfAborted();
+    const session = await this.waitForCreatedSession(
+      client.createSession(providerLaunchConfig, launchContext, createOptions),
+      options.signal,
+    );
     await this.requireExternalMcpSupport(session, storedConfig);
+    if (options.signal?.aborted) {
+      await this.closeUnregisteredSession(session);
+      options.signal.throwIfAborted();
+    }
     const agent = await this.registerSession(session, storedConfig, resolvedAgentId, {
       labels: options.labels,
       initialTitle: options.initialTitle,
@@ -1242,6 +1251,38 @@ export class AgentManager {
       });
     }
     return agent;
+  }
+
+  private async waitForCreatedSession(
+    operation: Promise<AgentSession>,
+    signal?: AbortSignal,
+  ): Promise<AgentSession> {
+    if (!signal) return operation;
+    return new Promise<AgentSession>((accept, reject) => {
+      const abort = () => {
+        signal.removeEventListener("abort", abort);
+        reject(signal.reason);
+      };
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) abort();
+      void operation
+        .then(
+          async (session) => {
+            signal.removeEventListener("abort", abort);
+            if (signal.aborted) {
+              await this.closeUnregisteredSession(session);
+            } else accept(session);
+            return;
+          },
+          (error: unknown) => {
+            signal.removeEventListener("abort", abort);
+            reject(error);
+          },
+        )
+        .catch((error: unknown) =>
+          this.logger.error({ err: error }, "Failed to close canceled provider creation"),
+        );
+    });
   }
 
   private buildCreateSessionOptions(options?: {

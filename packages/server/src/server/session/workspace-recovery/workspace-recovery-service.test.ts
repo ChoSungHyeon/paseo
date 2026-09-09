@@ -117,6 +117,50 @@ describe("workspace recovery", () => {
     expect(unarchived).toEqual([workspace.workspaceId]);
   });
 
+  test("a repeated restore of an already active workspace succeeds without another unarchive", async () => {
+    const workspace = createWorkspace({ archivedAt: null });
+    const { service, unarchived } = createHarness({ workspace });
+    await expect(service.restore(workspace.workspaceId)).resolves.toEqual({
+      workspaceId: workspace.workspaceId,
+      action: "unarchive",
+    });
+    expect(unarchived).toEqual([]);
+  });
+
+  test("expiry during restore preparation cannot unarchive the workspace", async () => {
+    const workspace = createWorkspace({ kind: "directory", branch: null });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let unarchived = false;
+    const service = createWorkspaceRecoveryService({
+      paseoHome: "/paseo-home",
+      worktreesRoot: "/worktrees",
+      getWorkspace: async () => workspace,
+      getProject: async () => createProject(),
+      isDirectory: async () => {
+        entered();
+        await gate;
+        return true;
+      },
+      unarchiveWorkspace: async () => {
+        unarchived = true;
+      },
+    });
+    const controller = new AbortController();
+    const restoring = service.restore(workspace.workspaceId, controller.signal);
+    await started;
+    controller.abort(new Error("expired"));
+    release();
+    await expect(restoring).rejects.toThrow("expired");
+    expect(unarchived).toBe(false);
+  });
+
   test("does not offer recovery for a missing non-worktree directory", async () => {
     const workspace = createWorkspace({ kind: "directory", branch: null });
     const { service } = createHarness({ workspace });

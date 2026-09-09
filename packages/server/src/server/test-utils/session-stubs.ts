@@ -286,6 +286,12 @@ export function createAgentRequestsStub(): SessionOptions["agentRequests"] {
       return agentId;
     },
     send: (input) => input.send(),
+    run: (_startup, operation) => operation(),
+    control: async (_context, _request, operation) => {
+      await operation();
+    },
+    cancelOperation: async () => ({ agentId: null, outcome: "settled" }),
+    inspectOperation: async () => ({ agentId: null, outcome: "settled" }),
   };
 }
 

@@ -326,3 +326,45 @@ test("failed create never archives a reused worktree", async () => {
   });
   expect(await hub.worktreeState(worktreeCwd!)).toEqual({ exists: true, listed: true });
 });
+
+test("control cancels a held legacy provider create and fences a delayed replay", async () => {
+  const hub = await launchRelationship();
+  hub.holdAgentCreation();
+  hub.beginOwnedCreate("held-create", "expired-create");
+  await hub.agentCreationAttempts(1);
+  const creation = hub.ownedCreateResult("held-create");
+  let settled = false;
+  const control = hub.controlExecution("expired-create", "archive").then((result) => {
+    settled = true;
+    return result;
+  });
+  try {
+    await expect.poll(() => settled, { timeout: 500 }).toBe(true);
+    expect(await control).toMatchObject({ success: true });
+    expect(await creation).toMatchObject({ payload: { success: false } });
+  } finally {
+    hub.finishAgentCreation();
+  }
+  hub.beginOwnedCreate("late-create", "expired-create");
+  expect(await hub.ownedCreateResult("late-create")).toMatchObject({ payload: { success: false } });
+});
+
+test("the legacy absolute deadline cancels provider creation without a control frame", async () => {
+  const hub = await launchRelationship();
+  hub.holdAgentCreation();
+  hub.beginOwnedCreate("deadline-create", "deadline-create", {
+    deadlineAt: new Date(Date.now() + 1_000).toISOString(),
+  });
+  try {
+    await hub.agentCreationAttempts(1);
+    expect(await hub.ownedCreateResult("deadline-create")).toMatchObject({
+      payload: { success: false },
+    });
+  } finally {
+    hub.finishAgentCreation();
+  }
+  hub.beginOwnedCreate("deadline-replay", "deadline-create");
+  expect(await hub.ownedCreateResult("deadline-replay")).toMatchObject({
+    payload: { success: false },
+  });
+});

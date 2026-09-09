@@ -192,7 +192,7 @@ An environment or dynamic named-agent expression must have a finite set of possi
 | --------------- | -------- | ---------------------------------------------------------------------------------------- |
 | `id`            | yes      | Unique within the workflow.                                                              |
 | `environment`   | yes      | Literal environment name or finite expression resolving to one.                          |
-| `max_runtime`   | yes      | Step hard limit.                                                                         |
+| `max_runtime`   | yes      | Absolute step limit, including agent startup.                                            |
 | `idle_timeout`  | yes      | Idle limit no longer than `max_runtime`.                                                 |
 | `agent`         | yes      | Named agent, finite expression selecting a named agent, or complete static inline agent. |
 | `prompt`        | yes      | Ordered `text` and `include` blocks.                                                     |
@@ -202,6 +202,12 @@ An environment or dynamic named-agent expression must have a finite set of possi
 | `allow_outputs` | no       | Provider output capabilities with optional `max` and `required`.                         |
 | `auto_archive`  | no       | Archive the agent after the step ends.                                                   |
 | `github`        | no       | Explicit GitHub authority for this step.                                                 |
+
+`max_runtime` starts when Hub dispatches the step. Preparing a filesystem worktree, creating the provider agent, restoring a continuation workspace, and acknowledging the initial prompt all consume that budget. The deadline does not reset when startup finishes or activity arrives. The trigger's whole-run deadline can end the step sooner. Provider-specific startup failures can also end a step before its deadline.
+
+`idle_timeout` starts alongside dispatch. An `initializing` or `running` agent status clears the idle deadline; an `idle` status starts it again. Meaningful agent activity refreshes an armed idle deadline. Connection heartbeats do not count as agent activity. Allow enough idle time for preparation before the daemon reports an active agent.
+
+Continuation requires a daemon that supports cancelable agent requests. Update the daemon if Hub requests an update. When a deadline expires, Hub ends the step and reconciles daemon cleanup before another step can use the same conversation. If a daemon restart leaves the operation's outcome unknown, inspect the agent and workspace in Paseo before retrying with a new conversation key; Hub does not automatically repeat an ambiguous launch or prompt.
 
 An inline agent is static and complete:
 

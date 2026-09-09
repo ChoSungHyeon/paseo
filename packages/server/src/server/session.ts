@@ -464,7 +464,10 @@ export interface SessionOptions {
   worktreesRoot?: string;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
-  agentRequests: Pick<AgentRequests, "create" | "send">;
+  agentRequests: Pick<
+    AgentRequests,
+    "create" | "send" | "run" | "control" | "cancelOperation" | "inspectOperation"
+  >;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
   directorySync?: DirectorySyncService;
@@ -754,7 +757,10 @@ export class Session {
   private readonly daemonSession: DaemonSession;
   private readonly hubExecutionController: HubExecutionController | null;
   private readonly workspaceScripts: WorkspaceScriptsService;
-  private readonly agentRequests: Pick<AgentRequests, "create" | "send">;
+  private readonly agentRequests: Pick<
+    AgentRequests,
+    "create" | "send" | "run" | "control" | "cancelOperation" | "inspectOperation"
+  >;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
 
   constructor(options: SessionOptions) {
@@ -2002,6 +2008,7 @@ export class Session {
       this.dispatchAgentRelationshipMessage(msg) ??
       this.dispatchAgentTimelineMessage(msg, source) ??
       this.dispatchHubExecutionMessage(msg) ??
+      this.dispatchAgentRequestMessage(msg) ??
       this.dispatchAgentLifecycleMessage(msg) ??
       this.dispatchAgentConfigMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
@@ -2385,6 +2392,27 @@ export class Session {
     return undefined;
   }
 
+  private dispatchAgentRequestMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "agent.requests.inspect.request":
+        return this.agentRequests.inspectOperation(msg.key, msg.creationKey).then((result) => {
+          return this.emit({
+            type: "agent.requests.inspect.response",
+            payload: { requestId: msg.requestId, ...result },
+          });
+        });
+      case "agent.requests.cancel.request":
+        return this.agentRequests.cancelOperation(msg.key, msg.creationKey).then((result) => {
+          return this.emit({
+            type: "agent.requests.cancel.response",
+            payload: { requestId: msg.requestId, ...result },
+          });
+        });
+      default:
+        return undefined;
+    }
+  }
+
   private dispatchAgentLifecycleMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
       case "fetch_agents_request":
@@ -2408,11 +2436,15 @@ export class Session {
       case "project.icon.set.request":
         return this.handleProjectIconSetRequest(msg);
       case "send_agent_message_request":
-        return this.handleSendAgentMessageRequest(msg);
+        return this.agentRequests.run(msg.operation, (signal) =>
+          this.handleSendAgentMessageRequest(msg, signal),
+        );
       case "wait_for_finish_request":
         return this.handleWaitForFinish(msg.agentId, msg.requestId, msg.timeoutMs);
       case "create_agent_request":
-        return this.handleCreateAgentRequest(msg);
+        return this.agentRequests.run(msg.operation, (signal) =>
+          this.handleCreateAgentRequest(msg, signal),
+        );
       case "resume_agent_request":
         return this.handleResumeAgentRequest(msg);
       case "import_agent_request":
@@ -2420,7 +2452,7 @@ export class Session {
       case "refresh_agent_request":
         return this.handleRefreshAgentRequest(msg);
       case "cancel_agent_request":
-        return this.handleCancelAgentRequest(msg.agentId, msg.requestId);
+        return this.handleCancelAgentRequest(msg.agentId, msg.requestId, msg.operation);
       case "agent_permission_response":
         return this.handleAgentPermissionResponse(msg.agentId, msg.requestId, msg.response);
       case "clear_agent_attention":
@@ -2660,7 +2692,9 @@ export class Session {
       case "workspace.recovery.inspect.request":
         return this.handleWorkspaceRecoveryInspectRequest(msg);
       case "workspace.recovery.restore.request":
-        return this.handleWorkspaceRecoveryRestoreRequest(msg);
+        return this.agentRequests.run(msg.operation, (signal) =>
+          this.handleWorkspaceRecoveryRestoreRequest(msg, signal),
+        );
       case "workspace.clear_attention.request":
         return this.handleWorkspaceClearAttentionRequest(msg);
       case "workspace.mark_unread.request":
@@ -3481,9 +3515,10 @@ export class Session {
 
   private async handleWorkspaceRecoveryRestoreRequest(
     request: Extract<SessionInboundMessage, { type: "workspace.recovery.restore.request" }>,
+    signal?: AbortSignal,
   ): Promise<void> {
     try {
-      await this.restoreWorkspaceAndEmit(request.workspaceId);
+      await this.restoreWorkspaceAndEmit(request.workspaceId, signal);
       this.emit({
         type: "workspace.recovery.restore.response",
         payload: {
@@ -3568,14 +3603,20 @@ export class Session {
   /**
    * Handle create agent request
    */
-  private async handleCreateAgentRequest(msg: CreateAgentRequestMessage): Promise<void> {
+  private async handleCreateAgentRequest(
+    msg: CreateAgentRequestMessage,
+    signal?: AbortSignal,
+  ): Promise<void> {
     try {
+      if (msg.operation && msg.idempotencyKey === undefined) {
+        throw new Error("Cancelable creation requires an idempotencyKey");
+      }
       let agent: AgentSnapshotPayload;
       if (msg.idempotencyKey !== undefined) {
         if (msg.initialPrompt !== undefined) {
           throw new Error("Idempotent creation requires sending the initial prompt separately");
         }
-        const { requestId: _requestId, idempotencyKey, ...request } = msg;
+        const { requestId: _requestId, idempotencyKey, operation: _operation, ...request } = msg;
         const id = await this.agentRequests.create({
           key: idempotencyKey,
           request,
@@ -3583,14 +3624,14 @@ export class Session {
             this.agentManager.getAgent(agentId) != null ||
             (await this.agentStorage.get(agentId)) !== null,
           create: async (agentId) => {
-            await this.createSessionAgent(msg, agentId);
+            await this.createSessionAgent(msg, agentId, signal);
           },
         });
         const record = await this.agentStorage.get(id);
         if (!record) throw new Error("Previously created agent no longer exists");
         agent = this.buildStoredAgentPayload(record);
       } else {
-        agent = await this.createSessionAgent(msg);
+        agent = await this.createSessionAgent(msg, undefined, signal);
       }
       this.emit({
         type: "status",
@@ -3625,9 +3666,20 @@ export class Session {
     }
   }
 
+  private async cleanupCanceledAgentCreate(
+    agentId: string | null,
+    signal?: AbortSignal,
+  ): Promise<string | null> {
+    if (!signal?.aborted || !agentId) return agentId;
+    await this.agentManager.closeAgent(agentId);
+    await this.agentManager.deleteAgentState(agentId);
+    return null;
+  }
+
   private async createSessionAgent(
     msg: CreateAgentRequestMessage,
     agentId?: string,
+    signal?: AbortSignal,
   ): Promise<AgentSnapshotPayload> {
     const {
       config,
@@ -3676,6 +3728,7 @@ export class Session {
         hasLegacyGitOptions: Boolean(git),
       });
       createdWorktreeForCleanup = createdWorktree;
+      signal?.throwIfAborted();
       const resolvedIntent = await this.resolveSessionCreateAgentIntent({
         request: msg,
         createdWorktree,
@@ -3697,6 +3750,7 @@ export class Session {
         },
         {
           kind: "session",
+          signal,
           agentId,
           config: resolvedIntent.config,
           workspaceId: resolvedIntent.intent.workspaceId,
@@ -3716,6 +3770,7 @@ export class Session {
         },
       );
       createdAgentId = snapshot.id;
+      signal?.throwIfAborted();
       await this.agentUpdates.forwardLiveAgent(snapshot);
       if (resolvedIntent.createdDirectoryWorkspace && trimmedPrompt) {
         this.workspaceAutoName.scheduleForDirectory(
@@ -3738,6 +3793,7 @@ export class Session {
       );
       return this.buildAgentPayload(liveSnapshot);
     } catch (error) {
+      createdAgentId = await this.cleanupCanceledAgentCreate(createdAgentId, signal);
       await this.createAgentLifecycleDispatch.cleanupCreatedWorktreeAfterFailedAgentCreate({
         createdWorktree: createdWorktreeForCleanup,
         createdAgentId,
@@ -4031,13 +4087,19 @@ export class Session {
     }
   }
 
-  private async handleCancelAgentRequest(agentId: string, requestId?: string): Promise<void> {
+  private async handleCancelAgentRequest(
+    agentId: string,
+    requestId?: string,
+    operation?: { key: string; deadlineAt?: string },
+  ): Promise<void> {
     this.sessionLogger.info({ agentId }, `Cancel request received for agent ${agentId}`);
 
     try {
-      await cancelAgentRunCommand(
-        { agentManager: this.agentManager, logger: this.sessionLogger },
-        agentId,
+      await this.agentRequests.control(operation, { action: "interrupt", agentId }, () =>
+        cancelAgentRunCommand(
+          { agentManager: this.agentManager, logger: this.sessionLogger },
+          agentId,
+        ),
       );
       if (requestId) {
         const agent = this.agentManager.getAgent(agentId);
@@ -5269,8 +5331,8 @@ export class Session {
     };
   }
 
-  private async restoreWorkspaceAndEmit(workspaceId: string): Promise<void> {
-    await this.workspaceRecovery.restore(workspaceId);
+  private async restoreWorkspaceAndEmit(workspaceId: string, signal?: AbortSignal): Promise<void> {
+    await this.workspaceRecovery.restore(workspaceId, signal);
     const workspace = await this.workspaceRegistry.get(workspaceId);
     if (!workspace) {
       throw new Error(`Recovered workspace record not found: ${workspaceId}`);
@@ -6834,34 +6896,39 @@ export class Session {
         throw new Error(`Workspace not found: ${request.workspaceId}`);
       }
 
-      await archiveByScope(
-        {
-          paseoHome: this.paseoHome,
-          paseoWorktreesBaseRoot: this.worktreesRoot,
-          github: this.github,
-          workspaceGitService: this.workspaceGitService,
-          agentManager: this.agentManager,
-          agentStorage: this.agentStorage,
-          findWorkspaceIdForCwd: (cwd) => this.findWorkspaceIdForCwd(cwd),
-          getWorkspace: (workspaceId) => this.workspaceRegistry.get(workspaceId),
-          listActiveWorkspaces: () => this.listActiveWorkspaceRefs(),
-          archiveWorkspaceRecord: (workspaceId) => this.archiveWorkspaceRecord(workspaceId),
-          emitWorkspaceUpdatesForWorkspaceIds: (workspaceIds) =>
-            this.emitWorkspaceUpdatesForWorkspaceIds(workspaceIds),
-          markWorkspaceArchiving: (workspaceIds, archivingAt) =>
-            this.markWorkspaceArchiving(workspaceIds, archivingAt),
-          clearWorkspaceArchiving: (workspaceIds) => this.clearWorkspaceArchiving(workspaceIds),
-          assertWorkspaceAutomationAllowed: (workspaceId) =>
-            assertWorkspaceAutomationAllowedForWorkspace(this.workspaceRegistry, workspaceId),
-          killTerminalsForWorkspace: (workspaceId) =>
-            this.terminalController.killTerminalsForWorkspace(workspaceId),
-          stopWorkspaceSetup: (workspaceId) => this.workspaceSetupRuntime.stop(workspaceId),
-          sessionLogger: this.sessionLogger,
-        },
-        {
-          scope: { kind: "workspace", workspaceId: existing.workspaceId },
-          requestId: request.requestId,
-        },
+      await this.agentRequests.control(
+        request.operation,
+        { action: "archive", workspaceId: request.workspaceId },
+        () =>
+          archiveByScope(
+            {
+              paseoHome: this.paseoHome,
+              paseoWorktreesBaseRoot: this.worktreesRoot,
+              github: this.github,
+              workspaceGitService: this.workspaceGitService,
+              agentManager: this.agentManager,
+              agentStorage: this.agentStorage,
+              findWorkspaceIdForCwd: (cwd) => this.findWorkspaceIdForCwd(cwd),
+              getWorkspace: (workspaceId) => this.workspaceRegistry.get(workspaceId),
+              listActiveWorkspaces: () => this.listActiveWorkspaceRefs(),
+              archiveWorkspaceRecord: (workspaceId) => this.archiveWorkspaceRecord(workspaceId),
+              emitWorkspaceUpdatesForWorkspaceIds: (workspaceIds) =>
+                this.emitWorkspaceUpdatesForWorkspaceIds(workspaceIds),
+              markWorkspaceArchiving: (workspaceIds, archivingAt) =>
+                this.markWorkspaceArchiving(workspaceIds, archivingAt),
+              clearWorkspaceArchiving: (workspaceIds) => this.clearWorkspaceArchiving(workspaceIds),
+              assertWorkspaceAutomationAllowed: (workspaceId) =>
+                assertWorkspaceAutomationAllowedForWorkspace(this.workspaceRegistry, workspaceId),
+              killTerminalsForWorkspace: (workspaceId) =>
+                this.terminalController.killTerminalsForWorkspace(workspaceId),
+              stopWorkspaceSetup: (workspaceId) => this.workspaceSetupRuntime.stop(workspaceId),
+              sessionLogger: this.sessionLogger,
+            },
+            {
+              scope: { kind: "workspace", workspaceId: existing.workspaceId },
+              requestId: request.requestId,
+            },
+          ),
       );
 
       const archivedWorkspace = await this.workspaceRegistry.get(request.workspaceId);
@@ -7569,6 +7636,7 @@ export class Session {
 
   private async handleSendAgentMessageRequest(
     msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
+    signal?: AbortSignal,
   ): Promise<void> {
     const resolved = await this.resolveAgentIdentifier(msg.agentId);
     if (!resolved.ok) {
@@ -7584,7 +7652,20 @@ export class Session {
       return;
     }
 
+    let cancellation: Promise<unknown> | undefined;
+    const abort = () => {
+      if (this.agentManager.getAgent(resolved.agentId)) {
+        cancellation ??= this.agentManager.cancelAgentRun(resolved.agentId).then((result) => {
+          if (result.status === "refused") throw new Error("agent_request_outcome_unknown");
+          return result;
+        });
+        void cancellation.catch(() => undefined);
+      }
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
     try {
+      signal?.throwIfAborted();
       const agentId = resolved.agentId;
 
       const prompt = buildAgentPrompt(msg.text, msg.images, msg.attachments);
@@ -7598,9 +7679,11 @@ export class Session {
         "agent.session.send_agent_message",
       );
       const send = async () => {
+        signal?.throwIfAborted();
         const result = await sendPromptToAgent({
           agentManager: this.agentManager,
           agentStorage: this.agentStorage,
+          signal,
           agentId,
           prompt,
           messageId: msg.messageId,
@@ -7608,8 +7691,12 @@ export class Session {
           clearPendingPermissions: true,
           logger: this.sessionLogger,
         });
+        if (signal?.aborted) {
+          await this.agentManager.cancelAgentRun(agentId);
+          signal.throwIfAborted();
+        }
         if (result.disposition === "turn_started") {
-          await waitForAgentRunStartWithTimeout(this.agentManager, agentId);
+          await waitForAgentRunStartWithTimeout(this.agentManager, agentId, signal);
         }
       };
       if (msg.messageId) {
@@ -7650,6 +7737,9 @@ export class Session {
           error: errorToFriendlyMessage(error),
         },
       });
+    } finally {
+      signal?.removeEventListener("abort", abort);
+      await cancellation;
     }
   }
 

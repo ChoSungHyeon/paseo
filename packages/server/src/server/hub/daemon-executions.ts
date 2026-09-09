@@ -1,3 +1,4 @@
+import type { AgentRequests } from "../agent/requests/index.js";
 import type {
   AgentSnapshotPayload,
   AgentStreamEventPayload,
@@ -17,6 +18,7 @@ import { daemonExecutionKey, type DaemonAgentOwner } from "../agent/agent-owner.
 
 export interface HubExecutionAgentCreateInput {
   executionId: string;
+  deadlineAt?: string;
   provider: string;
   cwd: string;
   prompt: string;
@@ -53,6 +55,7 @@ export type OwnedAgentEvent =
 
 interface DaemonExecutionsOptions {
   daemonId: string;
+  agentRequests: AgentRequests;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   createAgent: BoundCreateAgentCommand;
@@ -122,6 +125,8 @@ export class DaemonExecutions implements HubExecutionAgents {
     const pending = this.pendingControlActions.get(actionKey);
     if (pending) return pending;
 
+    const canceled = this.options.agentRequests.cancelAndSettle(executionKey);
+    void canceled.catch(() => undefined);
     const previous =
       this.controlTails.get(executionKey) ??
       this.pendingCreates.get(executionKey)?.then(() => undefined) ??
@@ -129,6 +134,7 @@ export class DaemonExecutions implements HubExecutionAgents {
     const authorityGeneration = this.authorityGeneration;
     const control = previous
       .catch(() => undefined)
+      .then(() => canceled)
       .then(() => this.controlOwnedExecution(owner, input, authorityGeneration));
     this.pendingControlActions.set(actionKey, control);
     this.controlTails.set(executionKey, control);
@@ -148,6 +154,9 @@ export class DaemonExecutions implements HubExecutionAgents {
     this.authorityActive = false;
     this.authorityGeneration++;
     await Promise.allSettled([
+      ...[...this.pendingCreates.keys()].map((key) =>
+        this.options.agentRequests.cancelAndSettle(key),
+      ),
       ...this.pendingCreates.values(),
       ...this.pendingControlActions.values(),
     ]);
@@ -180,12 +189,25 @@ export class DaemonExecutions implements HubExecutionAgents {
     requireHubMcpNamespace(input.mcpServers);
     requireToolPolicyServers(input.toolPolicy, input.mcpServers);
 
+    return this.options.agentRequests.run(
+      { key: daemonExecutionKey(owner), deadlineAt: input.deadlineAt },
+      (signal) => this.createNewOwnedAgent(owner, input, authorityGeneration, signal),
+    );
+  }
+
+  private async createNewOwnedAgent(
+    owner: DaemonAgentOwner,
+    input: HubExecutionAgentCreateInput,
+    authorityGeneration: number,
+    signal?: AbortSignal,
+  ): Promise<OwnedAgentSnapshot> {
     let createdWorktree: CreatePaseoWorktreeWorkflowResult | null = null;
     let createdAgentId: string | null = null;
     let result: Awaited<ReturnType<BoundCreateAgentCommand>>;
     try {
       result = await this.createAgentCommand({
         kind: "mcp",
+        signal,
         provider: input.model ? `${input.provider}/${input.model}` : input.provider,
         title: input.prompt,
         initialPrompt: input.prompt,
@@ -215,6 +237,7 @@ export class DaemonExecutions implements HubExecutionAgents {
           createdAgentId = created.agentId;
         },
       });
+      signal?.throwIfAborted();
       this.requireAuthority(authorityGeneration);
       requireExecutionWorkspaceId(result.liveSnapshot);
     } catch (error) {

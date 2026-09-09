@@ -251,7 +251,7 @@ test("Hub interrupts an owned running execution idempotently", async () => {
   expect(hub.ownedAgentIsRunning(created.payload.agentId!)).toBe(false);
 });
 
-test("Hub control waits for an in-flight create of the same execution", async () => {
+test("Hub control cancels an in-flight create of the same execution", async () => {
   const hub = await launchRelationship();
   hub.holdAgentCreation();
   hub.beginOwnedCreate("pending-control-create", "execution-pending-control", {
@@ -264,10 +264,8 @@ test("Hub control waits for an in-flight create of the same execution", async ()
   const created = await hub.ownedCreateResult("pending-control-create");
   const archived = await hub.executionControlResult("pending-control-archive");
 
-  expect(created).toMatchObject({ payload: { success: true, agentId: expect.any(String) } });
+  expect(created).toMatchObject({ payload: { success: false, agentId: null } });
   expect(archived).toMatchObject({ success: true, error: null, action: "archive" });
-  expect(created.payload.agent?.workspaceId).toEqual(expect.any(String));
-  expect(await hub.ownedAgentArchivedAt(created.payload.agentId!)).toEqual(expect.any(String));
 });
 
 test("Hub archives an execution workspace on a local checkout", async () => {

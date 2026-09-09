@@ -40,7 +40,10 @@ export type WorkspaceRecoveryState =
 
 export interface WorkspaceRecoveryService {
   inspect(workspaceId: string): Promise<WorkspaceRecoveryState>;
-  restore(workspaceId: string): Promise<{ workspaceId: string; action: WorkspaceRecoveryAction }>;
+  restore(
+    workspaceId: string,
+    signal?: AbortSignal,
+  ): Promise<{ workspaceId: string; action: WorkspaceRecoveryAction }>;
 }
 
 type RecoveryPlan =
@@ -140,15 +143,20 @@ export function createWorkspaceRecoveryService(deps: {
 
   async function restore(
     workspaceId: string,
+    signal?: AbortSignal,
   ): Promise<{ workspaceId: string; action: WorkspaceRecoveryAction }> {
+    signal?.throwIfAborted();
     const resolved = await resolveRecovery(workspaceId);
+    signal?.throwIfAborted();
     if (resolved.kind === "unavailable") {
+      if (resolved.reason === "workspace_not_archived") return { workspaceId, action: "unarchive" };
       throw new Error(resolved.message);
     }
 
     if (resolved.kind === "restore") {
       await recreateArchivedWorktree(resolved.workspace, resolved.sourceRepoRoot);
     }
+    signal?.throwIfAborted();
     await deps.unarchiveWorkspace(resolved.workspace);
     return { workspaceId, action: resolved.kind };
   }

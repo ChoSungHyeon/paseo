@@ -1,3 +1,4 @@
+import { AgentRequests } from "../../agent/requests/index.js";
 import { execFile } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { EventEmitter } from "node:events";
@@ -1558,6 +1559,7 @@ export class HubRelationshipHarness {
 
   private executionsForReconstruction(manager: AgentManager, storage: AgentStorage) {
     return new DaemonExecutions({
+      agentRequests: new AgentRequests(path.join(this.paseoHome, "agent-requests")),
       daemonId: this.relationshipFile()!.relationship.daemonId,
       agentManager: manager,
       agentStorage: storage,

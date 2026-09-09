@@ -182,6 +182,7 @@ export function isSystemInjectedEnvelope(text: string): boolean {
 }
 
 export interface SendPromptToAgentParams {
+  signal?: AbortSignal;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   agentId: string;
@@ -204,6 +205,7 @@ export interface SendPromptToAgentParams {
 }
 
 export interface StartCreatedAgentInitialPromptParams {
+  signal?: AbortSignal;
   agentManager: AgentManager;
   agentId: string;
   snapshot?: ManagedAgent;
@@ -229,6 +231,7 @@ const AGENT_RUN_START_TIMEOUT_MS = 60_000;
 export async function waitForAgentRunStartWithTimeout(
   agentManager: AgentManager,
   agentId: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   const provider = agentManager.getAgent(agentId)?.provider ?? "provider";
   const startAbort = new AbortController();
@@ -243,7 +246,9 @@ export async function waitForAgentRunStartWithTimeout(
   );
 
   try {
-    await agentManager.waitForAgentRunStart(agentId, { signal: startAbort.signal });
+    await agentManager.waitForAgentRunStart(agentId, {
+      signal: signal ? AbortSignal.any([signal, startAbort.signal]) : startAbort.signal,
+    });
   } finally {
     clearTimeout(startTimeout);
   }
@@ -263,6 +268,7 @@ export async function waitForAgentRunStartWithTimeout(
 export async function sendPromptToAgent(
   params: SendPromptToAgentParams,
 ): Promise<{ disposition: PromptDispatchDisposition }> {
+  params.signal?.throwIfAborted();
   const unarchive = params.unarchive ?? true;
 
   const record = await params.agentStorage.get(params.agentId);
@@ -283,6 +289,7 @@ export async function sendPromptToAgent(
     await params.agentManager.setAgentMode(params.agentId, params.sessionMode);
   }
 
+  params.signal?.throwIfAborted();
   const runOptions = params.messageId
     ? { ...params.runOptions, clientMessageId: params.messageId }
     : params.runOptions;
@@ -307,6 +314,7 @@ export async function startCreatedAgentInitialPrompt(
     return currentSnapshot;
   }
 
+  params.signal?.throwIfAborted();
   const dispatchResult = await startAgentRun(
     params.agentManager,
     params.agentId,
@@ -318,7 +326,7 @@ export async function startCreatedAgentInitialPrompt(
   );
 
   if (dispatchResult.disposition === "turn_started") {
-    await waitForAgentRunStartWithTimeout(params.agentManager, params.agentId);
+    await waitForAgentRunStartWithTimeout(params.agentManager, params.agentId, params.signal);
   }
 
   const refreshedSnapshot = params.agentManager.getAgent(params.agentId) ?? params.snapshot ?? null;
