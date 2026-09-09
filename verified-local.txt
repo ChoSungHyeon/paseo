@@ -1,0 +1,68 @@
+
+> @getpaseo/app@0.8.0-beta.1 test:e2e
+> playwright test --project=browser e2e/browser/new-workspace-navigation-guard.spec.ts --retries=0 --output=../../.dev/qa-2986/verified2-results
+
+(node:1685008) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1685008) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[metro] (node:1685175) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[metro] (Use `node --trace-warnings ...` to show where the warning was created)
+[metro] Starting project at [checkout]/packages/app
+[metro] Using src/app as the root directory for Expo Router.
+[metro] Experimental Expo Autolinking module resolver is enabled.
+[metro] React Compiler enabled
+[metro] Metro is running in CI mode, reloads are disabled. Remove CI=true to enable watch mode.
+[metro] Starting Metro Bundler
+[metro] Waiting on http://localhost:44431
+[metro] Logs for your project will appear below.
+[metro] Web packages/app/index.ts ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.6% (5002/5062)
+[metro] Web Bundled 2684ms packages/app/index.ts (5129 modules)
+[e2e] Metro warmed on port 44431
+
+Running 7 tests using 1 worker
+
+(node:1686980) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1686980) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[e2e] Worker 0 daemon started on port 40745, home: [checkout]/.dev/qa-2986/verified2/worker-0
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 167ms packages/app/index.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+[metro] Web Bundled 45ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+  ✓  1 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:8:9 › Delayed workspace creation › chat: keeps the workspace chosen during creation (14.4s)
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 180ms packages/app/index.ts (1 module)
+[metro] Web Bundled 4ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  2 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › chat: opens the created workspace when the user stays (13.1s)
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 174ms packages/app/index.ts (1 module)
+[metro] Web Bundled 5ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  3 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:8:9 › Delayed workspace creation › terminal: keeps the workspace chosen during creation (12.6s)
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 169ms packages/app/index.ts (1 module)
+[metro] Web Bundled 4ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  4 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › terminal: opens the created workspace when the user stays (12.2s)
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 256ms packages/app/index.ts (1 module)
+[metro] Web Bundled 7ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  5 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:8:9 › Delayed workspace creation › empty: keeps the workspace chosen during creation (12.7s)
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 192ms packages/app/index.ts (1 module)
+[metro] Web Bundled 5ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  6 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › empty: opens the created workspace when the user stays (11.9s)
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 175ms packages/app/index.ts (1 module)
+[metro] Web Bundled 5ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+  ✓  7 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:16:7 › Delayed workspace creation › preserves a newer draft opened while creation is pending (14.8s)
+[e2e] Worker 0 daemon stopped
+[e2e] Metro stopped
+
+  7 passed (1.7m)

@@ -1,0 +1,448 @@
+
+> @getpaseo/app@0.8.0-beta.1 test:e2e
+> playwright test --project=browser e2e/browser/new-workspace-navigation-guard.spec.ts --grep worktree  --retries=0 --output=../../.dev/qa-2986/worktree-before-results
+
+(node:1739202) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1739202) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[metro] (node:1739254) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[metro] (Use `node --trace-warnings ...` to show where the warning was created)
+[metro] Starting project at [checkout]/packages/app
+[metro] Using src/app as the root directory for Expo Router.
+[metro] Experimental Expo Autolinking module resolver is enabled.
+[metro] React Compiler enabled
+[metro] Metro is running in CI mode, reloads are disabled. Remove CI=true to enable watch mode.
+[metro] Starting Metro Bundler
+[metro] Waiting on http://localhost:42491
+[metro] Logs for your project will appear below.
+[metro] Web Bundled 2103ms packages/app/index.ts (5126 modules)
+[e2e] Metro warmed on port 42491
+
+Running 3 tests using 1 worker
+
+(node:1740196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1740196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[e2e] Worker 0 daemon started on port 45103, home: [checkout]/.dev/qa-2986/worktree-before/worker-0
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 160ms packages/app/index.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+[metro] Web Bundled 42ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: "/h/srv_e2e_worker_0/workspace/wks_fe50c0d38c63297c"
+Received: "/h/srv_e2e_worker_0/workspace/wks_d5397a0bda5853b8"
+
+Call Log:
+- Timeout 10000ms exceeded while waiting on the predicate
+    at pollMatcher ([checkout]/node_modules/playwright/lib/matchers/expect.js:293:11)
+    at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)
+    at [checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:128:7
+    at TestStepInfoImpl._runStepBody ([checkout]/node_modules/playwright/lib/worker/testInfo.js:506:14)
+    at [checkout]/node_modules/playwright/lib/common/testType.js:245:20
+    at [checkout]/node_modules/playwright/lib/common/testType.js:243:18
+    at TestTypeImpl._step ([checkout]/node_modules/playwright/lib/common/testType.js:240:12)
+    at verifyDelayedWorkspaceCreation ([checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:112:5)
+    at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:12:7
+    at [checkout]/node_modules/playwright/lib/worker/workerMain.js:323:9
+    at [checkout]/node_modules/playwright/lib/worker/testInfo.js:320:11
+    at TimeoutManager.withRunnable ([checkout]/node_modules/playwright/lib/worker/timeoutManager.js:67:14)
+    at TestInfoImpl._runWithTimeout ([checkout]/node_modules/playwright/lib/worker/testInfo.js:318:7)
+    at [checkout]/node_modules/playwright/lib/worker/workerMain.js:321:7
+    at WorkerMain._runTest ([checkout]/node_modules/playwright/lib/worker/workerMain.js:296:5)
+    at WorkerMain.runTestGroup ([checkout]/node_modules/playwright/lib/worker/workerMain.js:196:11)
+    at process.<anonymous> ([checkout]/node_modules/playwright/lib/common/process.js:72:22) {
+  [Symbol(step)]: {
+    category: 'expect',
+    apiName: 'expect.poll .toBe',
+    title: 'Expect "poll toBe"',
+    shortTitle: 'Expect "poll toBe"',
+    params: { expected: '/h/srv_e2e_worker_0/workspace/wks_fe50c0d38c63297c' },
+    infectParentStepsWithError: undefined,
+    stepId: 'expect@317',
+    group: undefined,
+    boxedStack: undefined,
+    location: {
+      file: '[checkout]/packages/app/e2e/support/helpers/route-assertions.ts',
+      line: 16,
+      column: 6,
+      function: 'expectAppRoute'
+    },
+    steps: [
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object]
+    ],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [TestInfoImpl],
+      _stepId: 'expect@317',
+      _title: 'Expect "poll toBe"',
+      _parentStep: [TestStepInfoImpl],
+      skip: [Function (anonymous)]
+    },
+    complete: [Function: complete],
+    endWallTime: 1788972777259,
+    error: {
+      message: 'Error: \x1B[2mexpect(\x1B[22m\x1B[31mreceived\x1B[39m\x1B[2m).\x1B[22mtoBe\x1B[2m(\x1B[22m\x1B[32mexpected\x1B[39m\x1B[2m) // Object.is equality\x1B[22m\n' +
+        '\n' +
+        'Expected: \x1B[32m"/h/srv_e2e_worker_0/workspace/wks_\x1B[7mfe50c0d38c63297c\x1B[27m"\x1B[39m\n' +
+        'Received: \x1B[31m"/h/srv_e2e_worker_0/workspace/wks_\x1B[7md5397a0bda5853b8\x1B[27m"\x1B[39m\n' +
+        '\n' +
+        'Call Log:\n' +
+        '- Timeout 10000ms exceeded while waiting on the predicate',
+      stack: 'Error: \x1B[2mexpect(\x1B[22m\x1B[31mreceived\x1B[39m\x1B[2m).\x1B[22mtoBe\x1B[2m(\x1B[22m\x1B[32mexpected\x1B[39m\x1B[2m) // Object.is equality\x1B[22m\n' +
+        '\n' +
+        'Expected: \x1B[32m"/h/srv_e2e_worker_0/workspace/wks_\x1B[7mfe50c0d38c63297c\x1B[27m"\x1B[39m\n' +
+        'Received: \x1B[31m"/h/srv_e2e_worker_0/workspace/wks_\x1B[7md5397a0bda5853b8\x1B[27m"\x1B[39m\n' +
+        '\n' +
+        'Call Log:\n' +
+        '- Timeout 10000ms exceeded while waiting on the predicate\n' +
+        '    at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)\n' +
+        '    at [checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:128:7\n' +
+        '    at verifyDelayedWorkspaceCreation ([checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:112:5)\n' +
+        '    at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:12:7',
+      cause: undefined
+    }
+  }
+}
+[e2e] Worker 0 daemon stopped
+  ✘  1 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › worktree chat: keeps the workspace chosen during creation (21.1s)
+(node:1744054) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1744054) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[e2e] Worker 1 daemon started on port 42363, home: [checkout]/.dev/qa-2986/worktree-before/worker-1
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 173ms packages/app/index.ts (1 module)
+[metro] Web Bundled 5ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: "/h/srv_e2e_worker_1/workspace/wks_2685c8a535a75a09"
+Received: "/h/srv_e2e_worker_1/workspace/wks_9b35d52930eaaba6"
+
+Call Log:
+- Timeout 10000ms exceeded while waiting on the predicate
+    at pollMatcher ([checkout]/node_modules/playwright/lib/matchers/expect.js:293:11)
+    at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)
+    at [checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:128:7
+    at TestStepInfoImpl._runStepBody ([checkout]/node_modules/playwright/lib/worker/testInfo.js:506:14)
+    at [checkout]/node_modules/playwright/lib/common/testType.js:245:20
+    at [checkout]/node_modules/playwright/lib/common/testType.js:243:18
+    at TestTypeImpl._step ([checkout]/node_modules/playwright/lib/common/testType.js:240:12)
+    at verifyDelayedWorkspaceCreation ([checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:112:5)
+    at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:12:7
+    at [checkout]/node_modules/playwright/lib/worker/workerMain.js:323:9
+    at [checkout]/node_modules/playwright/lib/worker/testInfo.js:320:11
+    at TimeoutManager.withRunnable ([checkout]/node_modules/playwright/lib/worker/timeoutManager.js:67:14)
+    at TestInfoImpl._runWithTimeout ([checkout]/node_modules/playwright/lib/worker/testInfo.js:318:7)
+    at [checkout]/node_modules/playwright/lib/worker/workerMain.js:321:7
+    at WorkerMain._runTest ([checkout]/node_modules/playwright/lib/worker/workerMain.js:296:5)
+    at WorkerMain.runTestGroup ([checkout]/node_modules/playwright/lib/worker/workerMain.js:196:11)
+    at process.<anonymous> ([checkout]/node_modules/playwright/lib/common/process.js:72:22) {
+  [Symbol(step)]: {
+    category: 'expect',
+    apiName: 'expect.poll .toBe',
+    title: 'Expect "poll toBe"',
+    shortTitle: 'Expect "poll toBe"',
+    params: { expected: '/h/srv_e2e_worker_1/workspace/wks_2685c8a535a75a09' },
+    infectParentStepsWithError: undefined,
+    stepId: 'expect@198',
+    group: undefined,
+    boxedStack: undefined,
+    location: {
+      file: '[checkout]/packages/app/e2e/support/helpers/route-assertions.ts',
+      line: 16,
+      column: 6,
+      function: 'expectAppRoute'
+    },
+    steps: [
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object]
+    ],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [TestInfoImpl],
+      _stepId: 'expect@198',
+      _title: 'Expect "poll toBe"',
+      _parentStep: [TestStepInfoImpl],
+      skip: [Function (anonymous)]
+    },
+    complete: [Function: complete],
+    endWallTime: 1788972801584,
+    error: {
+      message: 'Error: \x1B[2mexpect(\x1B[22m\x1B[31mreceived\x1B[39m\x1B[2m).\x1B[22mtoBe\x1B[2m(\x1B[22m\x1B[32mexpected\x1B[39m\x1B[2m) // Object.is equality\x1B[22m\n' +
+        '\n' +
+        'Expected: \x1B[32m"/h/srv_e2e_worker_1/workspace/wks_\x1B[7m2685c8a535a75a09\x1B[27m"\x1B[39m\n' +
+        'Received: \x1B[31m"/h/srv_e2e_worker_1/workspace/wks_\x1B[7m9b35d52930eaaba6\x1B[27m"\x1B[39m\n' +
+        '\n' +
+        'Call Log:\n' +
+        '- Timeout 10000ms exceeded while waiting on the predicate',
+      stack: 'Error: \x1B[2mexpect(\x1B[22m\x1B[31mreceived\x1B[39m\x1B[2m).\x1B[22mtoBe\x1B[2m(\x1B[22m\x1B[32mexpected\x1B[39m\x1B[2m) // Object.is equality\x1B[22m\n' +
+        '\n' +
+        'Expected: \x1B[32m"/h/srv_e2e_worker_1/workspace/wks_\x1B[7m2685c8a535a75a09\x1B[27m"\x1B[39m\n' +
+        'Received: \x1B[31m"/h/srv_e2e_worker_1/workspace/wks_\x1B[7m9b35d52930eaaba6\x1B[27m"\x1B[39m\n' +
+        '\n' +
+        'Call Log:\n' +
+        '- Timeout 10000ms exceeded while waiting on the predicate\n' +
+        '    at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)\n' +
+        '    at [checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:128:7\n' +
+        '    at verifyDelayedWorkspaceCreation ([checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:112:5)\n' +
+        '    at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:12:7',
+      cause: undefined
+    }
+  }
+}
+[e2e] Worker 1 daemon stopped
+  ✘  2 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › worktree terminal: keeps the workspace chosen during creation (21.1s)
+(node:1746063) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1746063) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[e2e] Worker 2 daemon started on port 43559, home: [checkout]/.dev/qa-2986/worktree-before/worker-2
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 161ms packages/app/index.ts (1 module)
+[metro] Web Bundled 4ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: "/h/srv_e2e_worker_2/workspace/wks_412333da4804914d"
+Received: "/h/srv_e2e_worker_2/workspace/wks_23adbe2b7c4344f4"
+
+Call Log:
+- Timeout 10000ms exceeded while waiting on the predicate
+    at pollMatcher ([checkout]/node_modules/playwright/lib/matchers/expect.js:293:11)
+    at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)
+    at [checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:128:7
+    at TestStepInfoImpl._runStepBody ([checkout]/node_modules/playwright/lib/worker/testInfo.js:506:14)
+    at [checkout]/node_modules/playwright/lib/common/testType.js:245:20
+    at [checkout]/node_modules/playwright/lib/common/testType.js:243:18
+    at TestTypeImpl._step ([checkout]/node_modules/playwright/lib/common/testType.js:240:12)
+    at verifyDelayedWorkspaceCreation ([checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:112:5)
+    at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:12:7
+    at [checkout]/node_modules/playwright/lib/worker/workerMain.js:323:9
+    at [checkout]/node_modules/playwright/lib/worker/testInfo.js:320:11
+    at TimeoutManager.withRunnable ([checkout]/node_modules/playwright/lib/worker/timeoutManager.js:67:14)
+    at TestInfoImpl._runWithTimeout ([checkout]/node_modules/playwright/lib/worker/testInfo.js:318:7)
+    at [checkout]/node_modules/playwright/lib/worker/workerMain.js:321:7
+    at WorkerMain._runTest ([checkout]/node_modules/playwright/lib/worker/workerMain.js:296:5)
+    at WorkerMain.runTestGroup ([checkout]/node_modules/playwright/lib/worker/workerMain.js:196:11)
+    at process.<anonymous> ([checkout]/node_modules/playwright/lib/common/process.js:72:22) {
+  [Symbol(step)]: {
+    category: 'expect',
+    apiName: 'expect.poll .toBe',
+    title: 'Expect "poll toBe"',
+    shortTitle: 'Expect "poll toBe"',
+    params: { expected: '/h/srv_e2e_worker_2/workspace/wks_412333da4804914d' },
+    infectParentStepsWithError: undefined,
+    stepId: 'expect@189',
+    group: undefined,
+    boxedStack: undefined,
+    location: {
+      file: '[checkout]/packages/app/e2e/support/helpers/route-assertions.ts',
+      line: 16,
+      column: 6,
+      function: 'expectAppRoute'
+    },
+    steps: [
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object]
+    ],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [TestInfoImpl],
+      _stepId: 'expect@189',
+      _title: 'Expect "poll toBe"',
+      _parentStep: [TestStepInfoImpl],
+      skip: [Function (anonymous)]
+    },
+    complete: [Function: complete],
+    endWallTime: 1788972824859,
+    error: {
+      message: 'Error: \x1B[2mexpect(\x1B[22m\x1B[31mreceived\x1B[39m\x1B[2m).\x1B[22mtoBe\x1B[2m(\x1B[22m\x1B[32mexpected\x1B[39m\x1B[2m) // Object.is equality\x1B[22m\n' +
+        '\n' +
+        'Expected: \x1B[32m"/h/srv_e2e_worker_2/workspace/wks_\x1B[7m412333da4804914d\x1B[27m"\x1B[39m\n' +
+        'Received: \x1B[31m"/h/srv_e2e_worker_2/workspace/wks_\x1B[7m23adbe2b7c4344f4\x1B[27m"\x1B[39m\n' +
+        '\n' +
+        'Call Log:\n' +
+        '- Timeout 10000ms exceeded while waiting on the predicate',
+      stack: 'Error: \x1B[2mexpect(\x1B[22m\x1B[31mreceived\x1B[39m\x1B[2m).\x1B[22mtoBe\x1B[2m(\x1B[22m\x1B[32mexpected\x1B[39m\x1B[2m) // Object.is equality\x1B[22m\n' +
+        '\n' +
+        'Expected: \x1B[32m"/h/srv_e2e_worker_2/workspace/wks_\x1B[7m412333da4804914d\x1B[27m"\x1B[39m\n' +
+        'Received: \x1B[31m"/h/srv_e2e_worker_2/workspace/wks_\x1B[7m23adbe2b7c4344f4\x1B[27m"\x1B[39m\n' +
+        '\n' +
+        'Call Log:\n' +
+        '- Timeout 10000ms exceeded while waiting on the predicate\n' +
+        '    at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)\n' +
+        '    at [checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:128:7\n' +
+        '    at verifyDelayedWorkspaceCreation ([checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:112:5)\n' +
+        '    at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:12:7',
+      cause: undefined
+    }
+  }
+}
+[e2e] Worker 2 daemon stopped
+  ✘  3 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › worktree empty: keeps the workspace chosen during creation (20.3s)
+[e2e] Metro stopped
+
+
+  1) [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › worktree chat: keeps the workspace chosen during creation › Completion creates exactly the requested resource and preserves focus 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "/h/srv_e2e_worker_0/workspace/wks_fe50c0d38c63297c"
+    Received: "/h/srv_e2e_worker_0/workspace/wks_d5397a0bda5853b8"
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+       at ../support/helpers/route-assertions.ts:8
+
+       6 |   options?: { timeout?: number },
+       7 | ): Promise<void> {
+    >  8 |   await expect
+         |   ^
+       9 |     .poll(
+      10 |       () => {
+      11 |         const current = new URL(page.url());
+        at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)
+        at [checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:128:7
+        at verifyDelayedWorkspaceCreation ([checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:112:5)
+        at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:12:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/worktree-before-results/new-workspace-navigation-g-250d7-pace-chosen-during-creation-browser/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: browser-console (text/plain) ────────────────────────────────────────────────────
+    [console:info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+    [console:log] Running application "main" with appParams:
+     {rootTag: #root, hydrate: undefined} 
+    Development-level warnings: ON.
+    Performance optimizations: OFF.
+    [co...
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/worktree-before-results/new-workspace-navigation-g-250d7-pace-chosen-during-creation-browser/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../.dev/qa-2986/worktree-before-results/new-workspace-navigation-g-250d7-pace-chosen-during-creation-browser/error-context.md
+
+  2) [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › worktree terminal: keeps the workspace chosen during creation › Completion creates exactly the requested resource and preserves focus 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "/h/srv_e2e_worker_1/workspace/wks_2685c8a535a75a09"
+    Received: "/h/srv_e2e_worker_1/workspace/wks_9b35d52930eaaba6"
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+       at ../support/helpers/route-assertions.ts:8
+
+       6 |   options?: { timeout?: number },
+       7 | ): Promise<void> {
+    >  8 |   await expect
+         |   ^
+       9 |     .poll(
+      10 |       () => {
+      11 |         const current = new URL(page.url());
+        at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)
+        at [checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:128:7
+        at verifyDelayedWorkspaceCreation ([checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:112:5)
+        at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:12:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/worktree-before-results/new-workspace-navigation-g-73049-pace-chosen-during-creation-browser/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: browser-console (text/plain) ────────────────────────────────────────────────────
+    [console:info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+    [console:log] Running application "main" with appParams:
+     {rootTag: #root, hydrate: undefined} 
+    Development-level warnings: ON.
+    Performance optimizations: OFF.
+    [co...
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/worktree-before-results/new-workspace-navigation-g-73049-pace-chosen-during-creation-browser/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../.dev/qa-2986/worktree-before-results/new-workspace-navigation-g-73049-pace-chosen-during-creation-browser/error-context.md
+
+  3) [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › worktree empty: keeps the workspace chosen during creation › Completion creates exactly the requested resource and preserves focus 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "/h/srv_e2e_worker_2/workspace/wks_412333da4804914d"
+    Received: "/h/srv_e2e_worker_2/workspace/wks_23adbe2b7c4344f4"
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+       at ../support/helpers/route-assertions.ts:8
+
+       6 |   options?: { timeout?: number },
+       7 | ): Promise<void> {
+    >  8 |   await expect
+         |   ^
+       9 |     .poll(
+      10 |       () => {
+      11 |         const current = new URL(page.url());
+        at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)
+        at [checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:128:7
+        at verifyDelayedWorkspaceCreation ([checkout]/packages/app/e2e/support/helpers/new-workspace-navigation.ts:112:5)
+        at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:12:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/worktree-before-results/new-workspace-navigation-g-50515-pace-chosen-during-creation-browser/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: browser-console (text/plain) ────────────────────────────────────────────────────
+    [console:info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+    [console:log] Running application "main" with appParams:
+     {rootTag: #root, hydrate: undefined} 
+    Development-level warnings: ON.
+    Performance optimizations: OFF.
+    [co...
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/worktree-before-results/new-workspace-navigation-g-50515-pace-chosen-during-creation-browser/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../.dev/qa-2986/worktree-before-results/new-workspace-navigation-g-50515-pace-chosen-during-creation-browser/error-context.md
+
+  3 failed
+    [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › worktree chat: keeps the workspace chosen during creation 
+    [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › worktree terminal: keeps the workspace chosen during creation 
+    [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:11:9 › Delayed workspace creation › worktree empty: keeps the workspace chosen during creation 
+npm error Lifecycle script `test:e2e` failed with error:
+npm error code 1
+npm error path [checkout]/packages/app
+npm error workspace @getpaseo/app@0.8.0-beta.1
+npm error location [checkout]/packages/app
+npm error command failed
+npm error command sh -c playwright test --project=browser e2e/browser/new-workspace-navigation-guard.spec.ts --grep 'worktree ' --retries=0 --output=../../.dev/qa-2986/worktree-before-results

@@ -1,0 +1,60 @@
+
+> @getpaseo/app@0.8.0-beta.1 test
+> vitest run src/screens/new-workspace/background-handoff.test.ts --bail=1
+
+(node:1614854) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.7 [checkout]/packages/app
+
+(node:1614987) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/screens/new-workspace/background-handoff.test.ts
+[DraftStore] Failed to persist draft checkpoint ReferenceError: window is not defined
+    at [checkout]/node_modules/@react-native-async-storage/async-storage/lib/commonjs/AsyncStorage.js:69:52
+    at [checkout]/node_modules/@react-native-async-storage/async-storage/lib/commonjs/AsyncStorage.js:39:21
+    at new Promise (<anonymous>)
+    at createPromise ([checkout]/node_modules/@react-native-async-storage/async-storage/lib/commonjs/AsyncStorage.js:37:10)
+    at Object.setItem ([checkout]/node_modules/@react-native-async-storage/async-storage/lib/commonjs/AsyncStorage.js:69:12)
+    at Object.setItem ([checkout]/packages/app/src/storage/validated-persist-storage.ts:39:28)
+    at flush ([checkout]/packages/app/src/stores/draft-store/persistence.ts:73:21)
+    at Object.setItem ([checkout]/packages/app/src/stores/draft-store/persistence.ts:85:16)
+    at setItem ([checkout]/node_modules/zustand/esm/middleware.mjs:358:20)
+    at Function.api.setState ([checkout]/node_modules/zustand/esm/middleware.mjs:366:12)
+
+ ❯ |unit| src/screens/new-workspace/background-handoff.test.ts (5 tests | 1 failed) 9ms
+     × keeps a newer draft written while workspace creation was pending 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| src/screens/new-workspace/background-handoff.test.ts > createWorkspaceAgentInBackground > keeps a newer draft written while workspace creation was pending
+AssertionError: expected '' to be 'a newer workspace idea' // Object.is equality
+
+- Expected
++ Received
+
+- a newer workspace idea
+
+ ❯ src/screens/new-workspace/background-handoff.test.ts:95:25
+     93|     saveDraft("a newer workspace idea");
+     94|     await run(async () => undefined, submittedVersion);
+     95|     expect(draftText()).toBe("a newer workspace idea");
+       |                         ^
+     96|   });
+     97|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  18:41:26
+   Duration  897ms (transform 545ms, setup 34ms, import 771ms, tests 9ms, environment 0ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path [checkout]/packages/app
+npm error workspace @getpaseo/app@0.8.0-beta.1
+npm error location [checkout]/packages/app
+npm error command failed
+npm error command sh -c vitest run src/screens/new-workspace/background-handoff.test.ts --bail=1

@@ -1,0 +1,140 @@
+
+> @getpaseo/app@0.8.0-beta.1 test:e2e
+> playwright test --project=browser e2e/browser/new-workspace-navigation-guard.spec.ts --retries=0 --output=../../.dev/qa-2986/baseline-results
+
+(node:1586722) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1586722) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[metro] (node:1586752) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[metro] (Use `node --trace-warnings ...` to show where the warning was created)
+[metro] Starting project at [checkout]/packages/app
+[metro] Using src/app as the root directory for Expo Router.
+[metro] Experimental Expo Autolinking module resolver is enabled.
+[metro] React Compiler enabled
+[metro] Metro is running in CI mode, reloads are disabled. Remove CI=true to enable watch mode.
+[metro] Starting Metro Bundler
+[metro] Waiting on http://localhost:33023
+[metro] Logs for your project will appear below.
+[metro] Web Bundled 2099ms packages/app/index.ts (5126 modules)
+[e2e] Metro warmed on port 33023
+
+Running 2 tests using 1 worker
+
+(node:1586952) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1586952) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[e2e] Worker 0 daemon started on port 39489, home: [checkout]/.dev/qa-2986/baseline/worker-0
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 167ms packages/app/index.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+[metro] Web Bundled 48ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[e2e] Worker 0 daemon stopped
+  ✘  1 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:72:7 › New workspace navigation guard › stays put when creation resolves after the user moved on, and still starts the agent (14.1s)
+(node:1589025) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1589025) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[e2e] Worker 1 daemon started on port 36915, home: [checkout]/.dev/qa-2986/baseline/worker-1
+[metro] Web packages/app/index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+[metro] Web Bundled 171ms packages/app/index.ts (1 module)
+[metro] Web Bundled 4ms packages/app/src/attachments/web/indexeddb-attachment-store.ts (1 module)
+[metro]  LOG  [web] Logs will appear in the browser console
+[e2e] Worker 1 daemon stopped
+  ✘  2 [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:146:7 › New workspace navigation guard › stays put when a terminal launch resolves after the user moved on, and still spawns the terminal (19.4s)
+[e2e] Metro stopped
+
+
+  1) [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:72:7 › New workspace navigation guard › stays put when creation resolves after the user moved on, and still starts the agent 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "/h/srv_e2e_worker_0/workspace/wks_c10aed6669e03cab"
+    Received: "/h/srv_e2e_worker_0/workspace/wks_aee4508341498f87"
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+       at ../support/helpers/route-assertions.ts:8
+
+       6 |   options?: { timeout?: number },
+       7 | ): Promise<void> {
+    >  8 |   await expect
+         |   ^
+       9 |     .poll(
+      10 |       () => {
+      11 |         const current = new URL(page.url());
+        at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)
+        at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:126:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/baseline-results/new-workspace-navigation-g-6feb8--and-still-starts-the-agent-browser/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: browser-console (text/plain) ────────────────────────────────────────────────────
+    [console:info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+    [console:log] Running application "main" with appParams:
+     {rootTag: #root, hydrate: undefined} 
+    Development-level warnings: ON.
+    Performance optimizations: OFF.
+    [co...
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/baseline-results/new-workspace-navigation-g-6feb8--and-still-starts-the-agent-browser/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../.dev/qa-2986/baseline-results/new-workspace-navigation-g-6feb8--and-still-starts-the-agent-browser/error-context.md
+
+  2) [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:146:7 › New workspace navigation guard › stays put when a terminal launch resolves after the user moved on, and still spawns the terminal 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "/h/srv_e2e_worker_1/workspace/wks_189929b605ec782a"
+    Received: "/h/srv_e2e_worker_1/workspace/wks_0939abd90c119bd0"
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+       at ../support/helpers/route-assertions.ts:8
+
+       6 |   options?: { timeout?: number },
+       7 | ): Promise<void> {
+    >  8 |   await expect
+         |   ^
+       9 |     .poll(
+      10 |       () => {
+      11 |         const current = new URL(page.url());
+        at expectAppRoute ([checkout]/packages/app/e2e/support/helpers/route-assertions.ts:8:3)
+        at [checkout]/packages/app/e2e/browser/new-workspace-navigation-guard.spec.ts:203:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/baseline-results/new-workspace-navigation-g-24fca-d-still-spawns-the-terminal-browser/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: browser-console (text/plain) ────────────────────────────────────────────────────
+    [console:info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+    [console:log] Running application "main" with appParams:
+     {rootTag: #root, hydrate: undefined} 
+    Development-level warnings: ON.
+    Performance optimizations: OFF.
+    [co...
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../.dev/qa-2986/baseline-results/new-workspace-navigation-g-24fca-d-still-spawns-the-terminal-browser/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../.dev/qa-2986/baseline-results/new-workspace-navigation-g-24fca-d-still-spawns-the-terminal-browser/error-context.md
+
+  2 failed
+    [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:72:7 › New workspace navigation guard › stays put when creation resolves after the user moved on, and still starts the agent 
+    [browser] › e2e/browser/new-workspace-navigation-guard.spec.ts:146:7 › New workspace navigation guard › stays put when a terminal launch resolves after the user moved on, and still spawns the terminal 
+npm error Lifecycle script `test:e2e` failed with error:
+npm error code 1
+npm error path [checkout]/packages/app
+npm error workspace @getpaseo/app@0.8.0-beta.1
+npm error location [checkout]/packages/app
+npm error command failed
+npm error command sh -c playwright test --project=browser e2e/browser/new-workspace-navigation-guard.spec.ts --retries=0 --output=../../.dev/qa-2986/baseline-results
