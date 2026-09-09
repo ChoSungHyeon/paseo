@@ -5,6 +5,7 @@ import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submi
 export interface CreateWorkspaceAgentInBackgroundInput {
   draftId: string;
   draftKey: string;
+  draftVersionAtSubmit: number | undefined;
   clearDraft: (lifecycle: "sent" | "abandoned") => void;
   draftContextScopeKey: string | null;
   createAgent: () => Promise<unknown>;
@@ -23,8 +24,6 @@ export interface CreateWorkspaceAgentInBackgroundInput {
 export async function createWorkspaceAgentInBackground(
   input: CreateWorkspaceAgentInBackgroundInput,
 ): Promise<void> {
-  const draftVersionAtSubmit = useDraftStore.getState().drafts[input.draftKey]?.version ?? null;
-
   await input.createAgent();
 
   useWorkspaceDraftSubmissionStore.getState().clearDraftSetup({ draftId: input.draftId });
@@ -37,7 +36,7 @@ export async function createWorkspaceAgentInBackground(
   // clearing would destroy the text needed to retry. And only if nothing else has written to the
   // draft since: the New workspace draft key is shared, so the user may have reopened the screen
   // and started typing something new while this was in flight.
-  if (useDraftStore.getState().drafts[input.draftKey]?.version === draftVersionAtSubmit) {
+  if (useDraftStore.getState().drafts[input.draftKey]?.version === input.draftVersionAtSubmit) {
     input.clearDraft("sent");
   }
 }

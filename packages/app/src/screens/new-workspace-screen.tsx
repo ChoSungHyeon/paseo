@@ -57,6 +57,7 @@ import {
 import { normalizeWorkspaceDescriptor, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
+import { useDraftStore } from "@/stores/draft-store";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { isActiveCreateFlowForDraft, useCreateFlowStore } from "@/stores/create-flow-store";
 import {
@@ -761,6 +762,7 @@ function normalizeBranchDetails(
 type SubmitOutcome = "navigated" | "background";
 
 interface SubmitDraftInput {
+  draftVersionAtSubmit: number | undefined;
   serverId: string;
   draftKey: string;
   clearDraft: (lifecycle: "sent" | "abandoned") => void;
@@ -941,6 +943,7 @@ function buildComposerInitialValues(input: {
 
 async function runCreateChatAgent(input: CreateChatAgentInput): Promise<SubmitOutcome> {
   const { payload, composerState, ensureWorkspace, serverId, clearDraft } = input;
+  const draftVersionAtSubmit = useDraftStore.getState().drafts[input.draftKey]?.version;
   const { text, attachments, cwd } = payload;
   if (!composerState) {
     throw new Error(input.labels.composerStateRequired);
@@ -969,6 +972,7 @@ async function runCreateChatAgent(input: CreateChatAgentInput): Promise<SubmitOu
     composerState,
   });
   return await submitWorkspaceDraft({
+    draftVersionAtSubmit,
     serverId,
     clearDraft,
     draftKey: input.draftKey,
@@ -1078,6 +1082,7 @@ async function submitWorkspaceDraft(input: SubmitDraftInput): Promise<SubmitOutc
   // screen's draft tab will never mount to issue create_agent, so this path does it instead.
   if (!input.isStillOnCreateScreen()) {
     await createWorkspaceAgentInBackground({
+      draftVersionAtSubmit: input.draftVersionAtSubmit,
       draftId,
       draftKey: input.draftKey,
       clearDraft,
@@ -1752,17 +1757,13 @@ export function NewWorkspaceScreen({
     });
   }, []);
 
-  // Read through refs: creation can outlive the render that started it, and the host runtime
-  // replaces the DaemonClient on reconnect. A captured client would be closed by then.
-  const connectionRef = useRef({ client, isConnected });
-  connectionRef.current = { client, isConnected };
   const withConnectedClient = useCallback(() => {
-    const connection = connectionRef.current;
-    if (!connection.client || !connection.isConnected) {
+    const connectedClient = getHostRuntimeStore().getClient(selectedServerId);
+    if (!connectedClient?.isConnected) {
       throw new Error(t("newWorkspace.errors.hostDisconnected"));
     }
-    return connection.client;
-  }, [t]);
+    return connectedClient;
+  }, [selectedServerId, t]);
 
   const clientReady = isConnected && Boolean(client);
   const hasSelectedSourceDirectory = selectedSourceDirectory !== null;

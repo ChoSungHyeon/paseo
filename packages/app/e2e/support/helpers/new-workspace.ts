@@ -1,4 +1,5 @@
 import { expect, type BrowserContext, type Page } from "@playwright/test";
+import type { CreateAgentRequestMessage } from "@getpaseo/protocol/messages";
 import type { DaemonClient as InternalDaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { decodeWorkspaceIdFromPathSegment } from "@/utils/host-routes";
 import { connectDaemonClient } from "./daemon-client-loader";
@@ -626,6 +627,7 @@ export async function delayBrowserAgentCreatedStatus(
 }
 
 export interface WorkspaceCreatedDelayControl {
+  agentRequests: readonly CreateAgentRequestMessage[];
   release(): void;
   waitForCreateRequest(): Promise<void>;
 }
@@ -638,6 +640,7 @@ export async function delayBrowserWorkspaceCreatedResponse(
   page: Page,
 ): Promise<WorkspaceCreatedDelayControl> {
   const daemonPortPattern = daemonWsRoutePattern();
+  const agentRequests: CreateAgentRequestMessage[] = [];
   const createRequestIds = new Set<string>();
   const delayedForwards: Array<() => void> = [];
   let releaseRequested = false;
@@ -651,6 +654,8 @@ export async function delayBrowserWorkspaceCreatedResponse(
 
     ws.onMessage((message) => {
       const sessionMessage = getSessionMessage(message);
+      if (sessionMessage?.type === "create_agent_request")
+        agentRequests.push(sessionMessage as CreateAgentRequestMessage);
       if (sessionMessage?.type === "workspace.create.request") {
         const requestId = getStringField(sessionMessage, "requestId");
         if (requestId) {
@@ -680,6 +685,7 @@ export async function delayBrowserWorkspaceCreatedResponse(
   });
 
   return {
+    agentRequests,
     release() {
       releaseRequested = true;
       for (const forward of delayedForwards.splice(0)) {

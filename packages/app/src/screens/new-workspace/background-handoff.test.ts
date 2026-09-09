@@ -19,11 +19,16 @@ function draftText(): string | undefined {
   return useDraftStore.getState().drafts[DRAFT_KEY]?.input.text;
 }
 
-function run(createAgent: () => Promise<unknown>) {
+function run(
+  createAgent: () => Promise<unknown>,
+  draftVersionAtSubmit = useDraftStore.getState().drafts[DRAFT_KEY]?.version,
+) {
   return createWorkspaceAgentInBackground({
     draftId: DRAFT_ID,
     draftKey: DRAFT_KEY,
-    clearDraft: (lifecycle) => useDraftStore.getState().clearDraftInput({ draftKey: DRAFT_KEY, lifecycle }),
+    draftVersionAtSubmit,
+    clearDraft: (lifecycle) =>
+      useDraftStore.getState().clearDraftInput({ draftKey: DRAFT_KEY, lifecycle }),
     draftContextScopeKey: SCOPE_KEY,
     createAgent,
   });
@@ -86,5 +91,11 @@ describe("createWorkspaceAgentInBackground", () => {
     });
 
     expect(draftText()).toBe("a different idea");
+  });
+  it("keeps a newer draft written while workspace creation was pending", async () => {
+    const submittedVersion = useDraftStore.getState().drafts[DRAFT_KEY]?.version;
+    saveDraft("a newer workspace idea");
+    await run(async () => undefined, submittedVersion);
+    expect(draftText()).toBe("a newer workspace idea");
   });
 });
