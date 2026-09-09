@@ -169,7 +169,7 @@ The workflow keeps one classifier branch and one worker branch. It does not dupl
 
 ## Prompt and context
 
-Prompt blocks remain ordered. Includes are literal file contents; Hub does not recursively scan partial text.
+Prompt blocks remain ordered. Includes are literal file contents; Hub does not recursively scan partial text. Hub sends the rendered prompt separately from the agent title, so the 200-character title limit does not limit your instructions or context.
 
 ```yaml
 prompt:
@@ -245,5 +245,7 @@ allow_outputs:
 ## Deadlines
 
 The workflow `max_runtime` limits the complete run. Every step has its own `max_runtime` and `idle_timeout`; remaining workflow time caps both. A timeout fails the run and stops later steps.
+
+Hub reconnects to the existing agent after a connection loss. If a run used temporary environment credentials and Hub no longer owns their live lease, recovery fails with `execution_credentials_unavailable`. This includes credentials revoked during Hub shutdown. Start a new run to obtain fresh credentials; an existing agent cannot receive a replacement process environment.
 
 The [configuration reference](/docs/hub/configuration/hub-yml) lists every field. Provider filters and invocation text are in [Triggers](/docs/hub/triggers).
