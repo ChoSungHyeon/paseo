@@ -96,6 +96,8 @@ worktree:
 
 For agents it dispatched, Hub owns creation, reconnect recovery, output observation, and completion. Agents you start yourself are untouched.
 
+Restarting Hub lets active agents continue working. Hub reconnects to the same agents and resumes tracking their output and completion. [GitHub credentials retain their original lifetime](/docs/hub/github#restarts-and-credential-lifetime).
+
 If Hub loses the create response, or the daemon restarts mid-execution, Hub resends the same create intent with the same execution id. The daemon returns the existing agent rather than running the prompt again. An agent that closed or errored is recorded as interrupted; Hub never silently starts a second one.
 
 ## Status

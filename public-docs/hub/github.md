@@ -37,7 +37,7 @@ steps:
           ${{ paseo.prompt }}
 ```
 
-The agent can use `git` and `gh` within the declared repositories and permissions. Hub mints the token when the step starts and revokes it when execution ends.
+The agent can use `git` and `gh` within the declared repositories and permissions. Hub mints the token when the step starts and revokes it when execution ends or its configured duration elapses.
 
 ## Fields
 
@@ -49,6 +49,12 @@ The agent can use `git` and `gh` within the declared repositories and permission
 | `duration`     | Positive token lifetime up to `1h`. Defaults to `1h`, GitHub's maximum.                                                                |
 
 Requested authority cannot exceed the GitHub App installation. Activation and dispatch fail clearly when the connection, repository, or permissions cannot be resolved.
+
+## Restarts and credential lifetime
+
+Restarting Hub preserves active executions and their existing credentials. Hub reconnects to the same agent and restores the original credential deadlines. A restart does not mint a replacement token or extend its lifetime.
+
+If Hub is unavailable when a shorter duration elapses, it revokes the overdue token when it returns. GitHub’s own expiry still limits the token lifetime to one hour. Revocation failures are retried after recovery.
 
 ## Agent environment
 
@@ -73,4 +79,4 @@ env:
   SOME_TOKEN: "${{ paseo.connections.some-connection.token }}"
 ```
 
-Hub resolves the value for the step and does not persist it. See [Hub security](/docs/hub/security) for provider and host boundaries.
+Hub persists resolved values as private execution data so it can recover after a restart. Authored configuration retains the expressions. See [Hub security](/docs/hub/security) for provider and host boundaries.
