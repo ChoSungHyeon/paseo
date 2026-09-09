@@ -11,7 +11,7 @@
  * - daemon status reports stopped when daemon not running
  * - daemon status --json outputs valid JSON
  * - daemon stop handles daemon not running gracefully
- * - daemon restart starts the daemon and can be cleaned up
+ * - daemon restart refuses to start a stopped daemon
  * - daemon status probes the live relay state over local IPC
  */
 
@@ -291,6 +291,7 @@ try {
       const nestedReload = await daemonCommand(["reload", "--host", listen, "--json"]);
       assert.strictEqual(nestedReload.exitCode, 0, nestedReload.stderr);
       assert.deepStrictEqual(JSON.parse(nestedReload.stdout), {
+        restartCommand: `paseo daemon restart --host ${JSON.stringify(listen)}`,
         appliedPaths: ["daemon.browserTools.enabled"],
         restartRequiredPaths: [],
         overrideControlledPaths: ["daemon.listen"],
@@ -303,6 +304,7 @@ try {
       });
       assert.strictEqual(aliasReload.exitCode, 0, aliasReload.stderr);
       assert.deepStrictEqual(JSON.parse(aliasReload.stdout), {
+        restartCommand: `paseo daemon restart --host ${JSON.stringify(listen)}`,
         appliedPaths: ["daemon.browserTools.enabled"],
         restartRequiredPaths: [],
         overrideControlledPaths: [],
@@ -311,6 +313,7 @@ try {
       const yamlReload = await daemonCommand(["reload", "--host", listen, "--format", "yaml"]);
       assert.strictEqual(yamlReload.exitCode, 0, yamlReload.stderr);
       assert.deepStrictEqual(YAML.parse(yamlReload.stdout), {
+        restartCommand: `paseo daemon restart --host ${JSON.stringify(listen)}`,
         appliedPaths: [],
         restartRequiredPaths: [],
         overrideControlledPaths: [],
@@ -342,14 +345,14 @@ try {
     console.log("✓ daemon status probes live relay state over local IPC\n");
   }
 
-  // Test 9: --relay accepts an already-enabled persisted relay while stopped
+  // Test 9: explicit offline relay consent persists for subsequent pairing
   {
-    console.log("Test 9: daemon pair --relay accepts persisted relay while stopped");
+    console.log("Test 9: daemon pair --relay persists offline relay consent");
     const configPath = join(paseoHome, "config.json");
     const config = JSON.parse(await readFile(configPath, "utf-8"));
     config.daemon = {
       ...config.daemon,
-      relay: { ...config.daemon?.relay, enabled: true },
+      relay: { ...config.daemon?.relay, enabled: false },
     };
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
 
@@ -363,7 +366,13 @@ try {
     const payload = JSON.parse(pairing.stdout);
     assert.strictEqual(payload.relayEnabled, true, "pairing should preserve persisted relay state");
     assert.match(payload.url, /#offer=/, "pairing should include the offline offer");
-    console.log("✓ daemon pair --relay accepts persisted relay while stopped\n");
+    const persistedRelay = await daemonCommand(["config", "get", "daemon.relay.enabled", "--json"]);
+    assert.strictEqual(persistedRelay.exitCode, 0, persistedRelay.stderr);
+    assert.strictEqual(JSON.parse(persistedRelay.stdout).value, true);
+    const subsequentPairing = await daemonCommand(["pair", "--json"]);
+    assert.strictEqual(subsequentPairing.exitCode, 0, subsequentPairing.stderr);
+    assert.match(JSON.parse(subsequentPairing.stdout).url, /#offer=/);
+    console.log("✓ daemon pair --relay persists offline consent for subsequent pairing\n");
   }
 } finally {
   // Best-effort daemon cleanup in case assertions fail before explicit stop.
