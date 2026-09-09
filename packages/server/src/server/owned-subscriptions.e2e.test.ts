@@ -1585,3 +1585,90 @@ test("permission outcomes and domain observations keep independent source owners
     await daemon.close();
   }
 });
+
+test("mark unread replies remain source-owned while directory observers receive attention", async () => {
+  const daemon = await createTestPaseoDaemon({ mcpEnabled: false });
+  const admin = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
+  const peers: SubscriptionPeer[] = [];
+  try {
+    await admin.connect();
+    const agent = await admin.createAgent({
+      provider: "codex",
+      cwd: daemon.staticDir,
+      title: "Finished",
+    });
+    const actor = await SubscriptionPeer.connect(daemon.port, "mark-unread-shared");
+    peers.push(actor);
+    const sibling = await SubscriptionPeer.connect(daemon.port, "mark-unread-shared");
+    peers.push(sibling);
+    const quiet = await SubscriptionPeer.connect(daemon.port, "mark-unread-shared");
+    peers.push(quiet);
+    await sibling.request({ type: "fetch_agents_request", requestId: "directory", subscribe: {} });
+    const snapshot = sibling.frames.flatMap((frame) =>
+      frame.type === "session" && frame.message.type === "fetch_agents_response"
+        ? [frame.message.payload]
+        : [],
+    )[0];
+    const workspaceId = snapshot.entries.find((entry) => entry.agent.id === agent.id)!.agent
+      .workspaceId!;
+    await actor.request({
+      type: "workspace.clear_attention.request",
+      workspaceId,
+      requestId: "clear",
+    });
+    actor.frames.length = sibling.frames.length = quiet.frames.length = 0;
+    await actor.request({ type: "workspace.mark_unread.request", workspaceId, requestId: "mark" });
+    expect(actor.frames).toContainEqual(
+      expect.objectContaining({
+        message: {
+          type: "workspace.mark_unread.response",
+          payload: {
+            workspaceId,
+            requestId: "mark",
+            markedAgentId: agent.id,
+            success: true,
+            error: null,
+          },
+        },
+      }),
+    );
+    await expect
+      .poll(() =>
+        sibling.frames.some(
+          (frame) =>
+            frame.type === "session" &&
+            frame.message.type === "agent_update" &&
+            frame.message.payload.kind === "upsert" &&
+            frame.message.payload.agent.id === agent.id &&
+            frame.message.payload.agent.requiresAttention &&
+            frame.message.payload.subscriptionId === snapshot.subscriptionId,
+        ),
+      )
+      .toBe(true);
+    expect(
+      sibling.frames.some(
+        (frame) =>
+          frame.type === "session" && frame.message.type === "workspace.mark_unread.response",
+      ),
+    ).toBe(false);
+    expect(quiet.frames).toEqual([]);
+    expect(quiet.binaryFrames).toEqual([]);
+    await actor.request({
+      type: "workspace.mark_unread.request",
+      workspaceId,
+      requestId: "already-unread",
+    });
+    expect(actor.frames).toContainEqual(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          type: "workspace.mark_unread.response",
+          payload: expect.objectContaining({ requestId: "already-unread", success: false }),
+        }),
+      }),
+    );
+  } finally {
+    for (const peer of peers) peer.close();
+    await admin.close();
+    await daemon.close();
+  }
+});

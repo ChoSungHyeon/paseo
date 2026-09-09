@@ -24,7 +24,8 @@ function registry() {
         openSurface: () => {},
         openSettings: () => {},
         openPanel: () => {},
-        addComposerPill: () => () => {},
+        addComposerPill: () => ({ update() {}, remove() {} }),
+        addHeaderButton: () => ({ update() {}, remove() {} }),
       };
     },
   });

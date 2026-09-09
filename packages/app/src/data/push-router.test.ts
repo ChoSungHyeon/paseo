@@ -206,17 +206,18 @@ describe("server data push router", () => {
     const cwd = "/repo";
     const queryKey = checkoutDiffQueryKey(serverId, cwd, "uncommitted", undefined, false);
     const subscriptionId = "diff-sharing";
-    queryClient.getQueryCache().build(queryClient, {
+    const observer = new QueryObserver(queryClient, {
       queryKey,
       queryFn: skipToken,
       meta: checkoutDiffPushRoute({
-        enabled: false,
+        enabled: true,
         serverId,
         cwd,
         subscriptionId,
         compare: { mode: "uncommitted" },
       }),
     });
+    const unsubscribe = observer.subscribe(() => {});
     const unmount = mountServerDataPushRouter({ queryClient, client: fake.client, serverId });
     type Payload = SubscribeCheckoutDiffResponseMessage["payload"];
     const files: Payload["files"] = ["a.ts", "b.ts"].map((path) => ({
@@ -248,7 +249,13 @@ describe("server data push router", () => {
     const publish = (incomingFiles: Payload["files"], requestId: string) => {
       fake.emit({
         type: "subscribe_checkout_diff_response",
-        payload: { subscriptionId, cwd, files: incomingFiles, requestId, error: null },
+        payload: {
+          subscriptionId: fake.subscribeCheckoutDiffCalls[0]!.subscriptionId,
+          cwd,
+          files: incomingFiles,
+          requestId,
+          error: null,
+        },
       });
       return queryClient.getQueryData<Payload>(queryKey)!;
     };
@@ -265,6 +272,7 @@ describe("server data push router", () => {
       expect(next.files[0]!.hunks[0]!.lines[0]!.tokens![0]!.style).toBe("variable");
       expect(publish([], "deleted").files).toEqual([]);
     } finally {
+      unsubscribe();
       unmount();
       queryClient.clear();
     }

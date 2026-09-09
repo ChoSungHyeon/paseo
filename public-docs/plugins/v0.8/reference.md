@@ -1357,7 +1357,7 @@ const pill = client.addComposerPill({
 });
 ```
 
-For pills that follow the agent directory, use an explicit [owned list subscription](/docs/sdk/events#agent-directory).
+For pills that follow the agent directory, use an explicit [owned list subscription](/docs/sdk/events#follow-one-agents-status).
 The [local plugin example](https://github.com/getpaseo/paseo/blob/main/plugin-examples/local-plugin/client/main.tsx)
 replaces registrations on each snapshot and aborts the observation during entry cleanup, including pending bootstrap.
 
