@@ -1,0 +1,22 @@
+{
+  "before": {
+    "reload-tab-text": [
+      "Terminal",
+      "My named terminal"
+    ]
+  },
+  "after": {
+    "reload-tab-text": [
+      "",
+      "My named terminal"
+    ],
+    "first-visit-tab-text": [
+      "",
+      "My named terminal"
+    ],
+    "return-visit-tab-text": [
+      "",
+      "My named terminal"
+    ]
+  }
+}
