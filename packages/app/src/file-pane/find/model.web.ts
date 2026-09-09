@@ -39,8 +39,21 @@ export class FileFindModel {
   readonly getSnapshot = () => this.snapshot;
 
   readonly extension: Extension = [
-    // The custom panel lives inside the editor's monospace subtree.
     EditorView.theme({
+      // CodeMirror lays panels out as flex siblings of the scroller, which pushes
+      // the first lines down every time Find opens. Take the panel out of flow so
+      // the widget floats over the top-right of the content instead.
+      ".cm-panels.cm-panels-top": {
+        position: "absolute",
+        top: "0",
+        right: "0",
+        left: "auto",
+        maxWidth: "100%",
+        zIndex: "4",
+        border: "none",
+        backgroundColor: "transparent",
+      },
+      // The custom panel lives inside the editor's monospace subtree.
       ".paseo-file-find, .paseo-file-find *": { fontFamily: "var(--paseo-ui-font)" },
     }),
     search({ literal: true, top: true, createPanel: (view) => this.createPanel(view) }),

@@ -10,9 +10,11 @@ import { createPortal } from "react-dom";
 import { EditorView } from "@codemirror/view";
 import { Search } from "lucide-react-native";
 import { View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
+import { mutedIconColorMapping } from "@/components/ui/icon-button-chrome";
+import { paneContentToolbarIconSize, ToolbarButton } from "@/components/ui/pane-content-toolbar";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { PaneFind, type PaneFindHandle } from "@/pane-find";
 import { usePaneFocus } from "@/panels/pane-context";
 import { hasActiveWebOverlay } from "@/lib/overlay-root";
@@ -21,6 +23,8 @@ import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { FileFindModel } from "./model.web";
 
 export { FileFindModel } from "./model.web";
+
+const SearchIcon = withUnistyles(Search, mutedIconColorMapping);
 
 export function FileFind({
   model,
@@ -31,6 +35,7 @@ export function FileFind({
 }) {
   const { t } = useTranslation();
   const state = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+  const isCompact = useIsCompactFormFactor();
   const widget = useRef<PaneFindHandle>(null);
   const { isInteractive, focusPane } = usePaneFocus();
   const active = useRetainedPanelActive();
@@ -75,13 +80,9 @@ export function FileFind({
   if (!state.panel)
     return (
       <View style={styles.trigger}>
-        <Button
-          variant="ghost"
-          size="sm"
-          leftIcon={Search}
-          accessibilityLabel={t("paneFind.title")}
-          onPress={open}
-        />
+        <ToolbarButton label={t("paneFind.title")} compact={isCompact} onPress={open}>
+          <SearchIcon size={paneContentToolbarIconSize(isCompact)} />
+        </ToolbarButton>
       </View>
     );
   const total = `${state.total}${state.limited ? "+" : ""}`;
@@ -110,13 +111,18 @@ export function FileFind({
 }
 
 const styles = StyleSheet.create((theme) => ({
-  panel: { alignItems: "flex-end", padding: theme.spacing[2] },
+  panel: { alignItems: "flex-end", maxWidth: "100%", padding: theme.spacing[2] },
+  // Carries the open widget's chrome so the entry point reads as the same object.
   trigger: {
     position: "absolute",
     top: theme.spacing[2],
     right: theme.spacing[2],
     zIndex: 1,
+    padding: theme.spacing[1],
     backgroundColor: theme.colors.surface1,
-    borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    ...theme.shadow.md,
   },
 }));
