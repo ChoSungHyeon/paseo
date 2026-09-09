@@ -1252,6 +1252,7 @@ export const zhCN: TranslationResources = {
       detail: "正在停止本地 daemon。",
     },
     daemon: {
+      lifecycle: en.desktop.daemon.lifecycle,
       title: "Daemon",
       status: {
         title: "状态",

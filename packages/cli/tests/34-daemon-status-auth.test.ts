@@ -26,7 +26,7 @@ try {
     assert.strictEqual(status.connectedDaemon, "auth_required");
     assert(!("runningAgents" in status), "status should not fetch agent counts");
     assert(!("idleAgents" in status), "status should not fetch agent counts");
-    assert.match(status.note, /requires a password/i);
+    assert.match(status.note, /Password required/i);
     assert.doesNotMatch(status.note, /not reachable/i);
     console.log("✓ missing password reports auth_required\n");
   }
@@ -44,7 +44,7 @@ try {
 
     assert.strictEqual(status.localDaemon, "running");
     assert.strictEqual(status.connectedDaemon, "auth_failed");
-    assert.match(status.note, /password was rejected/i);
+    assert.match(status.note, /Incorrect password/i);
     assert.doesNotMatch(status.note, /not reachable/i);
     console.log("✓ wrong password reports auth_failed\n");
   }

@@ -55,7 +55,16 @@ const env = {
 };
 
 try {
-  const start = await runLocalPaseo(["daemon", "restart", "--port", String(port)], env);
+  for (const [field, value] of [
+    ["daemon.listen", `127.0.0.1:${port}`],
+    ["daemon.relay.enabled", "false"],
+    ["features.dictation.enabled", "false"],
+    ["features.voiceMode.enabled", "false"],
+  ]) {
+    const saved = await runLocalPaseo(["daemon", "config", "set", field!, value!], env);
+    assert.equal(saved.exitCode, 0, saved.stderr);
+  }
+  const start = await runLocalPaseo(["daemon", "start"], env);
   assert.strictEqual(
     start.exitCode,
     0,

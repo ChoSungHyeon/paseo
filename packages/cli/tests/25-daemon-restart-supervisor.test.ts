@@ -6,7 +6,7 @@
  */
 
 import assert from "node:assert";
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,57 +40,33 @@ function isProcessRunning(pid: number): boolean {
   }
 }
 
-function readWorkerPid(supervisorPid: number): number | null {
-  if (!Number.isInteger(supervisorPid) || supervisorPid <= 0) {
-    return null;
-  }
-
-  const result = spawnSync("ps", ["ax", "-o", "pid=,ppid="], { encoding: "utf8" });
-  if (result.status !== 0 || result.error) {
-    return null;
-  }
-
-  for (const line of result.stdout.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const [pidToken, ppidToken] = trimmed.split(/\s+/);
-    const pid = Number.parseInt(pidToken ?? "", 10);
-    const ppid = Number.parseInt(ppidToken ?? "", 10);
-    if (!Number.isInteger(pid) || !Number.isInteger(ppid)) {
-      continue;
-    }
-    if (ppid === supervisorPid && pid > 0) {
-      return pid;
-    }
-  }
-
-  return null;
-}
-
 interface DaemonStatus {
   localDaemon: string | null;
   pid: number | null;
+  workerPid: number | null;
 }
 
 async function readDaemonStatus(paseoHome: string): Promise<DaemonStatus> {
   const result =
     await $`PASEO_HOME=${paseoHome} PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD=${testEnv.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD} PASEO_DICTATION_ENABLED=${testEnv.PASEO_DICTATION_ENABLED} PASEO_VOICE_MODE_ENABLED=${testEnv.PASEO_VOICE_MODE_ENABLED} npx paseo daemon status --home ${paseoHome} --json`.nothrow();
   if (result.exitCode !== 0) {
-    return { localDaemon: null, pid: null };
+    return { localDaemon: null, pid: null, workerPid: null };
   }
 
   try {
-    const parsed = JSON.parse(result.stdout) as { localDaemon?: unknown; pid?: unknown };
+    const parsed = JSON.parse(result.stdout) as {
+      localDaemon?: unknown;
+      pid?: unknown;
+      workerPid?: number;
+    };
     const localDaemon = typeof parsed.localDaemon === "string" ? parsed.localDaemon : null;
     const pid =
       typeof parsed.pid === "number" && Number.isInteger(parsed.pid) && parsed.pid > 0
         ? parsed.pid
         : null;
-    return { localDaemon, pid };
+    return { localDaemon, pid, workerPid: parsed.workerPid ?? null };
   } catch {
-    return { localDaemon: null, pid: null };
+    return { localDaemon: null, pid: null, workerPid: null };
   }
 }
 
@@ -173,7 +149,7 @@ try {
   );
   assert(supervisorPid !== null, "supervisor pid should exist once daemon starts");
   assert(isProcessRunning(supervisorPid), "supervisor process should be running");
-  const workerPidBeforeRestart = readWorkerPid(supervisorPid);
+  const workerPidBeforeRestart = statusBeforeRestart.workerPid;
   assert(workerPidBeforeRestart !== null, "supervisor should have a worker process before restart");
   assert(
     isProcessRunning(workerPidBeforeRestart),
@@ -184,7 +160,7 @@ try {
   );
 
   console.log("Test 2: app-style restart request should restart worker and keep daemon healthy");
-  const client = await tryConnectToDaemon({ host, timeout: 5000 });
+  const client = await tryConnectToDaemon({ target: { kind: "endpoint", host }, timeout: 5000 });
   assert(client, "daemon client should connect");
   try {
     const restartAck = await client.restartServer("settings_update");
@@ -198,8 +174,8 @@ try {
   }
 
   await waitFor(
-    () => {
-      const workerPid = readWorkerPid(supervisorPid);
+    async () => {
+      const workerPid = (await readDaemonStatus(paseoHome)).workerPid;
       return (
         workerPid !== null && workerPid !== workerPidBeforeRestart && isProcessRunning(workerPid)
       );
@@ -208,7 +184,7 @@ try {
     "worker pid did not change after restart request",
   );
 
-  const workerPidAfterRestart = readWorkerPid(supervisorPid);
+  const workerPidAfterRestart = (await readDaemonStatus(paseoHome)).workerPid;
   assert(workerPidAfterRestart !== null, "worker process should exist after restart");
   assert.notStrictEqual(
     workerPidAfterRestart,

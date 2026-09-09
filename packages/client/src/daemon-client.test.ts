@@ -1469,7 +1469,7 @@ test("honors explicit getDaemonStatus timeout below the session RPC default", as
   clients.push(client);
 
   const connectPromise = client.connect();
-  mock.triggerOpen();
+  mock.triggerOpen({ features: { daemonStatusRpc: true } });
   await connectPromise;
 
   const responsePromise = client.getDaemonStatus({

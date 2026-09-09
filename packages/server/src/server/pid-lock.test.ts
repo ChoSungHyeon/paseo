@@ -92,7 +92,7 @@ describe("pid-lock ownership", () => {
     }
   });
 
-  test("reclaims a stale desktop heartbeat lock after desktop confirms the daemon is unreachable", async () => {
+  test("preserves a stale live desktop heartbeat lock", async () => {
     const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-stale-desktop-heartbeat-"));
     const replacementOwnerPid = process.pid + 10_000;
 
@@ -113,14 +113,13 @@ describe("pid-lock ownership", () => {
       const staleTime = new Date(Date.now() - 10 * 60_000);
       await utimes(pidPath, staleTime, staleTime);
 
-      await acquirePidLock(paseoHome, null, {
-        ownerPid: replacementOwnerPid,
-        reclaimStaleDesktopLock: true,
-      });
+      await expect(
+        acquirePidLock(paseoHome, null, { ownerPid: replacementOwnerPid }),
+      ).rejects.toThrow("Another Paseo daemon is already running");
 
       const lock = await getPidLockInfo(paseoHome);
-      expect(lock?.pid).toBe(replacementOwnerPid);
-      expect(lock?.listen).toBeNull();
+      expect(lock?.pid).toBe(process.pid);
+      expect(lock?.listen).toBe("127.0.0.1:6767");
     } finally {
       await rm(paseoHome, { recursive: true, force: true });
     }
@@ -156,7 +155,7 @@ describe("pid-lock ownership", () => {
     }
   });
 
-  test("reclaims a stale legacy desktop lock after desktop confirms the daemon is unreachable", async () => {
+  test("preserves a stale live legacy desktop lock", async () => {
     const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-legacy-desktop-"));
     const replacementOwnerPid = process.pid + 10_000;
     const pidPath = join(paseoHome, "paseo.pid");
@@ -176,14 +175,13 @@ describe("pid-lock ownership", () => {
       const staleTime = new Date(Date.now() - 10 * 60_000);
       await utimes(pidPath, staleTime, staleTime);
 
-      await acquirePidLock(paseoHome, null, {
-        ownerPid: replacementOwnerPid,
-        reclaimStaleDesktopLock: true,
-      });
+      await expect(
+        acquirePidLock(paseoHome, null, { ownerPid: replacementOwnerPid }),
+      ).rejects.toThrow("Another Paseo daemon is already running");
 
       const lock = await getPidLockInfo(paseoHome);
-      expect(lock?.pid).toBe(replacementOwnerPid);
-      expect(lock?.heartbeat).toBe(true);
+      expect(lock?.pid).toBe(process.pid);
+      expect(lock?.heartbeat).toBeUndefined();
     } finally {
       await rm(paseoHome, { recursive: true, force: true });
     }
