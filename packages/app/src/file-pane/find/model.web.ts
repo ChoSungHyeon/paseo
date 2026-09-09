@@ -45,9 +45,10 @@ export class FileFindModel {
   readonly getSnapshot = () => this.snapshot;
 
   readonly extension: Extension = [
-    // The widget floats over the editor as a sibling overlay, so CodeMirror's own
-    // panel slot stays empty and contributes no layout or scroll margin of its own.
-    EditorView.theme({ ".cm-panels": { display: "none" } }),
+    // The widget floats over the editor as a sibling overlay, so this panel is an
+    // inert placeholder that only reports whether Find is open. Hide the placeholder
+    // itself, never the shared panel container — Go to line's dialog lives there too.
+    EditorView.theme({ ".cm-panel.paseo-file-find": { display: "none" } }),
     // Reveal matches clear of the widget instead of underneath it.
     EditorView.scrollMargins.of((view) => {
       const clearance = this.clearance(view);

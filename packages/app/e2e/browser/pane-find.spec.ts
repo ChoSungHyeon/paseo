@@ -390,3 +390,41 @@ test.describe("the active match stays visible under the floating widget", () => 
     await expect(right).toBeFocused();
   });
 });
+
+test("Go to line keeps its dialog with Find closed and open", async ({
+  page,
+  withWorkspace,
+}, testInfo) => {
+  const workspace = await withWorkspace({ prefix: "pane-find-goto-" });
+  const lines = Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join("\n");
+  await writeFile(path.join(workspace.repoPath, "lines.txt"), `${lines}\n`);
+  await workspace.navigateTo();
+  await openSource(page, "lines.txt");
+  const gotoInput = page.getByRole("textbox", { name: "Go to line" });
+
+  await test.step("with Find closed", async () => {
+    await source(page).focus();
+    await source(page).press("ControlOrMeta+Alt+g");
+    await expect(gotoInput).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("goto-line-find-closed.png") });
+    await gotoInput.fill("12");
+    await gotoInput.press("Enter");
+    await expect(page.getByLabel("Line 12, column 1")).toBeVisible();
+    await expect(gotoInput).toBeHidden();
+  });
+
+  await test.step("with Find open", async () => {
+    await source(page).press("ControlOrMeta+f");
+    await expect(query(page)).toBeFocused();
+    await query(page).fill("line 3");
+    await source(page).focus();
+    await source(page).press("ControlOrMeta+Alt+g");
+    await expect(gotoInput).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("goto-line-find-open.png") });
+    await gotoInput.fill("30");
+    await gotoInput.press("Enter");
+    await expect(page.getByLabel("Line 30, column 1")).toBeVisible();
+    await expect(query(page)).toHaveValue("line 3");
+    await expect(status(page)).toHaveText("11 matches");
+  });
+});
