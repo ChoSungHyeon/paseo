@@ -103,10 +103,7 @@ export class PluginRegistry {
         Object.assign(installation, evaluated);
         const paseo = runtime.paseo;
         installation.cleanup = async () => {
-          const results = await Promise.allSettled([
-            paseo.dispose(),
-            Promise.resolve().then(evaluated.cleanup),
-          ]);
+          const results = await Promise.allSettled([paseo.dispose(), evaluated.cleanup()]);
           const failures = results.filter((result) => result.status === "rejected");
           if (failures.length)
             throw new AggregateError(
