@@ -219,7 +219,7 @@ jobs:
 
       - name: Upload desktop lifecycle screenshots
         uses: actions/upload-artifact@v4
-        if: ${{ always() && runner.os == 'Linux' }}
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         with:
           name: desktop-lifecycle
           path: ${{ runner.temp }}/desktop-lifecycle

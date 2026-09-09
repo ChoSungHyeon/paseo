@@ -48,7 +48,7 @@ await writeFile(
 );
 let desktop;
 let captured;
-async function openDesktop(overrides = {}) {
+async function openDesktop() {
   desktop = await electron.launch({
     args: ["--no-sandbox", "--ozone-platform=headless", main],
     env: {
@@ -56,7 +56,6 @@ async function openDesktop(overrides = {}) {
       PASEO_LISTEN: "127.0.0.1:1",
       PASEO_WEB_UI_ENABLED: "false",
       PASEO_HOST: "unused:1",
-      ...overrides,
     },
   });
   await expect
@@ -171,7 +170,15 @@ try {
       preload,
       'if (process.argv[1]?.endsWith("daemon-worker.js")) await new Promise(resolve => setTimeout(resolve, 45000));',
     );
-    await openDesktop({ NODE_OPTIONS: `--import=${pathToFileURL(preload).href}` });
+    await openDesktop();
+    // Playwright removes NODE_OPTIONS from electron.launch's environment.
+    // Restore this runtime input inside the isolated fixture before it launches the daemon.
+    await desktop.evaluate(
+      (_, value) => {
+        process.env.NODE_OPTIONS = value;
+      },
+      `--import=${pathToFileURL(preload).href}`,
+    );
     const began = Date.now();
     const starting = await command("start_desktop_daemon");
     captured = await readDaemonInstance(home);
