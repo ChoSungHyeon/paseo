@@ -1,0 +1,17 @@
+
+> @getpaseo/app@0.8.0-beta.1 test
+> vitest run src/screens/new-workspace/background-handoff.test.ts --bail=1
+
+(node:2135683) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.7 <checkout>/packages/app
+
+(node:2135794) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  19:13:25
+   Duration  1.22s (transform 773ms, setup 33ms, import 1.07s, tests 8ms, environment 0ms)
+

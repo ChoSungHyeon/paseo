@@ -1,0 +1,54 @@
+
+> @getpaseo/app@0.8.0-beta.1 test
+> vitest run src/screens/new-workspace/background-handoff.baseline.test.ts --bail=1
+
+(node:2177266) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.7 <checkout>/packages/app
+
+(node:2177513) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/screens/new-workspace/background-handoff.baseline.test.ts
+[DraftStore] Failed to persist draft checkpoint ReferenceError: window is not defined
+    at <checkout>/node_modules/@react-native-async-storage/async-storage/lib/commonjs/AsyncStorage.js:69:52
+    at <checkout>/node_modules/@react-native-async-storage/async-storage/lib/commonjs/AsyncStorage.js:39:21
+    at new Promise (<anonymous>)
+    at createPromise (<checkout>/node_modules/@react-native-async-storage/async-storage/lib/commonjs/AsyncStorage.js:37:10)
+    at Object.setItem (<checkout>/node_modules/@react-native-async-storage/async-storage/lib/commonjs/AsyncStorage.js:69:12)
+    at Object.setItem (<checkout>/packages/app/src/storage/validated-persist-storage.ts:39:28)
+    at flush (<checkout>/packages/app/src/stores/draft-store/persistence.ts:73:21)
+    at Object.setItem (<checkout>/packages/app/src/stores/draft-store/persistence.ts:85:16)
+    at setItem (<checkout>/node_modules/zustand/esm/middleware.mjs:358:20)
+    at Function.api.setState (<checkout>/node_modules/zustand/esm/middleware.mjs:366:12)
+
+ ❯ |unit| src/screens/new-workspace/background-handoff.baseline.test.ts (1 test | 1 failed) 7ms
+     × preserves context added to a newer draft without editing its text 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| src/screens/new-workspace/background-handoff.baseline.test.ts > createWorkspaceAgentInBackground > preserves context added to a newer draft without editing its text
+AssertionError: Target cannot be null or undefined.
+ ❯ src/screens/new-workspace/background-handoff.baseline.test.ts:70:83
+     68|       });
+     69|     });
+     70|     expect(useWorkspaceAttachmentsStore.getState().attachmentsByScope[…
+       |                                                                                   ^
+     71|     expect(useWorkspaceDraftSubmissionStore.getState().setupByDraftId[…
+     72|       "/work/new-repo",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  19:14:12
+   Duration  1.14s (transform 716ms, setup 40ms, import 996ms, tests 7ms, environment 0ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path <checkout>/packages/app
+npm error workspace @getpaseo/app@0.8.0-beta.1
+npm error location <checkout>/packages/app
+npm error command failed
+npm error command sh -c vitest run src/screens/new-workspace/background-handoff.baseline.test.ts --bail=1

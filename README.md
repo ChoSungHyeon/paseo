@@ -2,7 +2,8 @@
 
 Contribution: Christoph Leiter's [PR #2986](https://github.com/getpaseo/paseo/pull/2986).
 Baseline: current main `433e67b18b7964a92d593bdc78c518143accfc8b`.
-Verified implementation: `9457bb6f4053b6ab36e7eabcae0a2902176635c8`.
+Original recorded implementation: `9457bb6f4053b6ab36e7eabcae0a2902176635c8`.
+Latest verified implementation: `1b96fa4fdcf147f7d412f210ff45170a9112da8d`.
 
 These are recorded Chromium interactions with the real Expo app and isolated Linux daemons.
 Workspace registry updates, git worktree creation, uploaded files, and shell terminals are real.
@@ -31,6 +32,22 @@ then opening the new workspace reveals `captured: Hello from the navigation guar
 
 ![Chosen workspace remains active](focus-preserved.png)
 ![New terminal has received the submitted prompt](terminal-started.png)
+
+## Context ownership repair verification
+
+The latest head also preserves a newer fork draft's setup and chat-history context,
+including context-only edits that do not change the text version. Cleanup captures
+ownership before workspace creation begins. A regression using the previous head's
+background helper fails; all seven cleanup tests pass on the repair.
+
+All ten browser journeys were rerun together and recorded on this repair:
+[complete results](context-e2e.txt), [newer-draft recording](after-context-repair-newer-draft.webm).
+These recordings repeat the real-daemon method and platform/provider limitations above.
+The fork context race is verified through the real draft stores in the focused unit test;
+the browser newer-draft journey covers text preservation.
+
+[Context regression before](context-red.txt), [after](context-green.txt),
+[typecheck](context-typecheck.txt), [lint](context-lint.txt), [format](context-format.txt).
 
 ## Results
 
