@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type pino from "pino";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { CheckoutSnapshotFacts, CheckoutStatusGit } from "../utils/checkout-git.js";
@@ -8,6 +9,8 @@ import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 
 const REPO_CWD = path.resolve("/tmp/paseo-observation-repo");
 const GIT_DIR = path.join(REPO_CWD, ".git");
+// Checkout observation must not depend on installed forge CLIs or host-auth probes.
+const REMOTE_URL = pathToFileURL(path.join(REPO_CWD, "remote.git")).href;
 const WORKTREE_A = path.resolve("/tmp/paseo-observation-worktree-a");
 const WORKTREE_B = path.resolve("/tmp/paseo-observation-worktree-b");
 
@@ -500,7 +503,7 @@ describe("WorkspaceGitService checkout observation", () => {
     const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
       ...createCheckoutFacts(cwd),
       currentBranch: "feature",
-      remoteUrl: "https://example.com/repo.git",
+      remoteUrl: REMOTE_URL,
       resolvedBaseRef: "main",
       comparisonBaseRef: "origin/main",
     }));
@@ -525,7 +528,7 @@ describe("WorkspaceGitService checkout observation", () => {
           currentBranch: "feature",
           baseRef: "main",
           hasRemote: true,
-          remoteUrl: "https://example.com/repo.git",
+          remoteUrl: REMOTE_URL,
         }),
       ),
       hasOriginRemote: vi.fn(async () => true),
@@ -569,7 +572,7 @@ describe("WorkspaceGitService checkout observation", () => {
     const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
       ...createCheckoutFacts(cwd),
       currentBranch: "feature",
-      remoteUrl: "https://example.com/repo.git",
+      remoteUrl: REMOTE_URL,
       resolvedBaseRef: "main",
       comparisonBaseRef: "origin/main",
     }));
@@ -626,7 +629,7 @@ describe("WorkspaceGitService checkout observation", () => {
       const releaseFetch = createDeferred<void>();
       const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
         ...createCheckoutFacts(cwd),
-        remoteUrl: "https://example.com/repo.git",
+        remoteUrl: REMOTE_URL,
       }));
       const runGitFetch = vi.fn(async (_cwd, observer) => {
         if (phase === "before") {
@@ -681,7 +684,7 @@ describe("WorkspaceGitService checkout observation", () => {
     const releaseFetch = createDeferred<void>();
     const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
       ...createCheckoutFacts(cwd),
-      remoteUrl: "https://example.com/repo.git",
+      remoteUrl: REMOTE_URL,
     }));
     const getCheckoutRefDerivedState = vi.fn();
     const service = createService(watcher, {
@@ -731,7 +734,7 @@ describe("WorkspaceGitService checkout observation", () => {
     const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
       ...createCheckoutFacts(cwd),
       currentBranch: "feature",
-      remoteUrl: "https://example.com/repo.git",
+      remoteUrl: REMOTE_URL,
       resolvedBaseRef: "main",
       comparisonBaseRef: "origin/main",
     }));
@@ -791,7 +794,7 @@ describe("WorkspaceGitService checkout observation", () => {
     const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
       ...createCheckoutFacts(cwd),
       currentBranch: "feature",
-      remoteUrl: "https://example.com/repo.git",
+      remoteUrl: REMOTE_URL,
       resolvedBaseRef: "main",
       comparisonBaseRef: "origin/main",
     }));
@@ -820,7 +823,7 @@ describe("WorkspaceGitService checkout observation", () => {
           currentBranch: "feature",
           baseRef: "main",
           hasRemote: true,
-          remoteUrl: "https://example.com/repo.git",
+          remoteUrl: REMOTE_URL,
         }),
       ),
       hasOriginRemote: vi.fn(async () => true),
@@ -864,7 +867,7 @@ describe("WorkspaceGitService checkout observation", () => {
     const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
       ...createCheckoutFacts(cwd),
       currentBranch: "feature",
-      remoteUrl: "https://example.com/repo.git",
+      remoteUrl: REMOTE_URL,
       resolvedBaseRef: "main",
       comparisonBaseRef: "origin/main",
     }));
@@ -875,7 +878,7 @@ describe("WorkspaceGitService checkout observation", () => {
           currentBranch: "feature",
           baseRef: "main",
           hasRemote: true,
-          remoteUrl: "https://example.com/repo.git",
+          remoteUrl: REMOTE_URL,
         }),
       ),
       hasOriginRemote: vi.fn(async () => true),
@@ -923,7 +926,7 @@ describe("WorkspaceGitService checkout observation", () => {
     const getCheckoutSnapshotFacts = vi.fn(async (cwd: string) => ({
       ...createCheckoutFacts(cwd),
       currentBranch: "main",
-      remoteUrl: "https://example.com/repo.git",
+      remoteUrl: REMOTE_URL,
       resolvedBaseRef: "main",
       comparisonBaseRef: null,
       branchRemoteName: null,

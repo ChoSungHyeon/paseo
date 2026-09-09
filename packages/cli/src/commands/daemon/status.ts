@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { DaemonConnectionError } from "@getpaseo/client/internal/daemon-client";
 import {
   readDaemonInstance,
   readPersistedConfig,
@@ -8,9 +9,9 @@ import {
   DaemonInstanceError,
 } from "@getpaseo/server";
 import { connectToDaemon, buildDaemonConnectionCommandError } from "../../utils/client.js";
-import { withOutput, type CommandOptions } from "../../output/index.js";
+import { withOutput, toCommandError, type CommandOptions } from "../../output/index.js";
 import { addJsonAndDaemonHostOptions } from "../../utils/command-options.js";
-import { describeDaemonTarget } from "../../utils/daemon-target.js";
+import { describeDaemonTarget, type DaemonTarget } from "../../utils/daemon-target.js";
 
 export function daemonStatusCommand(): Command {
   return addJsonAndDaemonHostOptions(
@@ -25,46 +26,11 @@ export async function runStatusCommand(options: CommandOptions, _command: Comman
     target.kind === "instance"
       ? localStatus(target.home, instance)
       : { host: describeDaemonTarget(target) };
-  let connectedDaemon = "not_probed";
-  let note: string | undefined;
-  let live: Record<string, unknown> = {};
-  if (target.kind === "endpoint" || instance?.listen) {
-    try {
-      const client = await connectToDaemon({
-        target,
-        instance: instance ?? undefined,
-        timeout: 1_500,
-      });
-      try {
-        const status = await client.getDaemonStatus({ timeout: 1_500 });
-        const current = target.kind === "instance" ? await readDaemonInstance(target.home) : null;
-        if (instance && (!current || !isSameDaemonInstance(instance, current)))
-          throw new DaemonInstanceError(
-            "DAEMON_REPLACED",
-            "Supervisor exited or was replaced during status observation.",
-          );
-        live = {
-          serverId: client.getLastServerInfoMessage()?.serverId ?? null,
-          daemonVersion: status.version,
-          workerPid: status.pid,
-          daemonNode: status.nodePath,
-          providers: status.providers,
-          relay: status.relay,
-        };
-        connectedDaemon = "reachable";
-      } finally {
-        await client.close();
-      }
-    } catch (error) {
-      const failure = buildDaemonConnectionCommandError({ target, error });
-      if (target.kind === "endpoint") throw failure;
-      connectedDaemon = "unreachable";
-      if (failure.code === "AUTH_REQUIRED") connectedDaemon = "auth_required";
-      if (failure.code === "AUTH_FAILED") connectedDaemon = "auth_failed";
-      note = failure.message;
-    }
-  }
-  const data: Record<string, unknown> = { ...local, ...live, connectedDaemon, note };
+  const observed =
+    target.kind === "endpoint" || instance?.listen
+      ? await probeDaemonStatus(target, instance, local)
+      : { connectedDaemon: "not_probed" };
+  const data: Record<string, unknown> = { ...local, ...observed };
   return {
     type: "single" as const,
     data,
@@ -81,6 +47,69 @@ export async function runStatusCommand(options: CommandOptions, _command: Comman
           .join("\n"),
     },
   };
+}
+
+async function probeDaemonStatus(
+  target: DaemonTarget,
+  instance: Awaited<ReturnType<typeof readDaemonInstance>>,
+  local: Record<string, unknown>,
+) {
+  let connectedDaemon = "unreachable";
+  let note: string | undefined;
+  let live: Record<string, unknown> = {};
+  let client: Awaited<ReturnType<typeof connectToDaemon>> | undefined;
+  try {
+    client = await connectToDaemon({ target, instance: instance ?? undefined, timeout: 1_500 });
+  } catch (error) {
+    const failure = buildDaemonConnectionCommandError({ target, error });
+    if (target.kind === "endpoint") throw failure;
+    connectedDaemon = "unreachable";
+    if (failure.code === "AUTH_REQUIRED") connectedDaemon = "auth_required";
+    if (failure.code === "AUTH_FAILED") connectedDaemon = "auth_failed";
+    note = failure.message;
+  }
+  if (!client) return { connectedDaemon, note };
+  try {
+    let requestError: unknown;
+    const status = await client.getDaemonStatus({ timeout: 1_500 }).catch((error: unknown) => {
+      requestError = error;
+      return null;
+    });
+    // Recheck even when the RPC times out before combining local and live observations.
+    const current = target.kind === "instance" ? await readDaemonInstance(target.home) : null;
+    if (instance && (!current || !isSameDaemonInstance(instance, current)))
+      throw new DaemonInstanceError(
+        "DAEMON_REPLACED",
+        "Supervisor exited or was replaced during status observation.",
+      );
+    const info = client.getLastServerInfoMessage();
+    live = { serverId: info?.serverId, daemonVersion: info?.version };
+    connectedDaemon = client.isConnected ? "reachable" : "unreachable";
+    if (!status) {
+      const failure = toCommandError(requestError);
+      note = `Status details unavailable (${failure.code}): ${failure.message}`;
+      if (
+        target.kind === "endpoint" ||
+        !client.isConnected ||
+        !(requestError instanceof DaemonConnectionError) ||
+        requestError.code !== "DAEMON_REQUEST_TIMEOUT"
+      ) {
+        throw { ...failure, message: note, details: { ...local, ...live, connectedDaemon } };
+      }
+    } else {
+      live = {
+        ...live,
+        daemonVersion: status.version,
+        workerPid: status.pid,
+        daemonNode: status.nodePath,
+        providers: status.providers,
+        relay: status.relay,
+      };
+    }
+  } finally {
+    await client.close();
+  }
+  return { ...live, connectedDaemon, note };
 }
 
 function localStatus(home: string, instance: Awaited<ReturnType<typeof readDaemonInstance>>) {

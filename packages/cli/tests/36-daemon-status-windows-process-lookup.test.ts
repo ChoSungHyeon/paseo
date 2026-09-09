@@ -1,42 +1,11 @@
 #!/usr/bin/env npx tsx
 
 import assert from "node:assert";
-import { spawn } from "node:child_process";
+import { runLocalPaseo } from "./helpers/local-cli.ts";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getAvailablePort } from "./helpers/network.ts";
-
-const CLI_ENTRY = join(import.meta.dirname, "..", "dist", "index.js");
-
-interface CommandResult {
-  exitCode: number | null;
-  stdout: string;
-  stderr: string;
-}
-
-function runLocalPaseo(args: string[], env: NodeJS.ProcessEnv): Promise<CommandResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [CLI_ENTRY, ...args], {
-      env: { ...process.env, ...env },
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", reject);
-    child.on("close", (exitCode) => {
-      resolve({ exitCode, stdout, stderr });
-    });
-  });
-}
 
 if (process.platform !== "win32") {
   console.log("Skipping Windows daemon status process lookup regression on non-Windows.");
