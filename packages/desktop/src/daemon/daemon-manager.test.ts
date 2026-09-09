@@ -1,11 +1,13 @@
-import { rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings/desktop-settings";
 import { createDaemonCommandHandlers } from "./daemon-manager";
 
 const mocks = vi.hoisted(() => ({
-  paseoHome: "/tmp/paseo-desktop-daemon-manager-test-home",
+  paseoHome: "",
   settings: {
     releaseChannel: "stable",
     daemon: {
@@ -23,13 +25,13 @@ const mocks = vi.hoisted(() => ({
   spawnProcess: vi.fn(),
   logInfo: vi.fn(),
   logError: vi.fn(),
-  appLogPath: "/tmp/paseo-desktop-daemon-manager-test-main.log",
+  appLogPath: "",
   getElectronLogFile: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
   app: {
-    getPath: vi.fn(() => "/tmp/paseo-user-data"),
+    getPath: vi.fn(() => mocks.paseoHome),
     getVersion: vi.fn(() => "1.2.3"),
     isPackaged: true,
   },
@@ -65,7 +67,7 @@ vi.mock("../settings/desktop-settings-electron.js", () => ({
 vi.mock("./runtime-paths.js", () => ({
   createNodeEntrypointInvocation: mocks.createNodeEntrypointInvocation,
   resolveDaemonRunnerEntrypoint: vi.fn(() => ({
-    entryPath: "/tmp/daemon.js",
+    entryPath: path.join(mocks.paseoHome, "daemon.js"),
     execArgv: [],
   })),
 }));
@@ -76,7 +78,12 @@ vi.mock("./cli/external.js", () => ({
 }));
 
 describe("daemon-manager commands", () => {
+  let fixtureRoot: string;
+
   beforeEach(() => {
+    fixtureRoot = mkdtempSync(path.join(tmpdir(), "paseo daemon manager "));
+    mocks.paseoHome = path.join(fixtureRoot, "home");
+    mocks.appLogPath = path.join(fixtureRoot, "main.log");
     mocks.settings = DEFAULT_DESKTOP_SETTINGS;
     mocks.runExternalCliJsonCommand.mockReset();
     mocks.runExternalCliTextCommand.mockReset();
@@ -87,13 +94,10 @@ describe("daemon-manager commands", () => {
     mocks.logError.mockReset();
     mocks.getElectronLogFile.mockReset();
     mocks.getElectronLogFile.mockReturnValue({ path: mocks.appLogPath });
-    rmSync(mocks.paseoHome, { recursive: true, force: true });
-    rmSync(mocks.appLogPath, { force: true });
   });
 
   afterEach(() => {
-    rmSync(mocks.paseoHome, { recursive: true, force: true });
-    rmSync(mocks.appLogPath, { force: true });
+    rmSync(fixtureRoot, { recursive: true, force: true });
   });
 
   it("returns the Electron main-process log tail from electron-log", () => {

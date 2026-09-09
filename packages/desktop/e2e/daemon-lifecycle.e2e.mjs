@@ -15,7 +15,7 @@ import {
 } from "@getpaseo/server";
 
 const repo = fileURLToPath(new URL("../../..", import.meta.url));
-const root = await mkdtemp(path.join(tmpdir(), "paseo-desktop-lifecycle-"));
+const root = await mkdtemp(path.join(tmpdir(), "paseo desktop lifecycle "));
 const home = path.join(root, "daemon");
 const env = Object.fromEntries(
   Object.entries(process.env).filter(

@@ -1,4 +1,4 @@
-import { mkdtemp, open, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, open, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -15,7 +15,8 @@ import {
 
 describe("pid-lock ownership", () => {
   test("writes and releases lock for explicit owner pid", async () => {
-    const paseoHome = await mkdtemp(join(tmpdir(), "paseo-pid-lock-owner-"));
+    const parent = await mkdtemp(join(tmpdir(), "paseo-pid-lock-owner-"));
+    const paseoHome = join(parent, "home");
     const ownerPid = process.pid + 10_000;
 
     try {
@@ -27,6 +28,9 @@ describe("pid-lock ownership", () => {
         ) => Promise<void>
       )(paseoHome, null, { ownerPid });
 
+      if (process.platform !== "win32") {
+        expect((await stat(paseoHome)).mode & 0o777).toBe(0o700);
+      }
       const lock = await getPidLockInfo(paseoHome);
       expect(lock?.pid).toBe(ownerPid);
       expect(lock?.listen).toBeNull();
@@ -55,7 +59,7 @@ describe("pid-lock ownership", () => {
       const lockAfterOwnerRelease = await getPidLockInfo(paseoHome);
       expect(lockAfterOwnerRelease).toBeNull();
     } finally {
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(parent, { recursive: true, force: true });
     }
   });
 

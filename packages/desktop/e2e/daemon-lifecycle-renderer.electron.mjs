@@ -78,7 +78,7 @@ export async function verifyAttachedDaemonControls({ repo, root, env, home, port
       .scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(root, "attached-daemon.png") });
 
-    async function acceptNativeDialog(title, artifact) {
+    async function respondToNativeDialog(title, artifact, key) {
       let windowId;
       await expect
         .poll(
@@ -106,17 +106,31 @@ export async function verifyAttachedDaemonControls({ repo, root, env, home, port
         return sources[0].thumbnail.toPNG().toString("base64");
       });
       await writeFile(path.join(root, artifact), Buffer.from(screenshot, "base64"));
-      execFileSync("xdotool", ["key", "--window", windowId, "Return"]);
+      // Escape destroys the dialog on key-down. Send through the private display
+      // focus so key-up does not target an already-destroyed X11 window.
+      execFileSync("xdotool", ["windowfocus", "--sync", windowId, "key", key]);
     }
 
     const management = page.getByRole("switch", { name: "Manage built-in daemon" });
     await management.click();
-    await acceptNativeDialog("Pause built-in daemon", "pause-attached-confirmation.png");
+    await respondToNativeDialog(
+      "Pause built-in daemon",
+      "pause-attached-confirmation.png",
+      "Return",
+    );
     await expect(management).not.toBeChecked();
     expect((await readDaemonInstance(home)).pid).toBe(instance.pid);
 
     await page.getByRole("button", { name: "Stop daemon", exact: true }).click();
-    await acceptNativeDialog("Stop local daemon", "stop-attached-confirmation.png");
+    await respondToNativeDialog("Stop local daemon", "stop-attached-cancelled.png", "Escape");
+    await expect(page.getByRole("button", { name: "Stop daemon", exact: true })).toBeEnabled();
+    expect(await readDaemonInstance(home)).toMatchObject({
+      pid: instance.pid,
+      startedAt: instance.startedAt,
+    });
+
+    await page.getByRole("button", { name: "Stop daemon", exact: true }).click();
+    await respondToNativeDialog("Stop local daemon", "stop-attached-confirmation.png", "Return");
     await expect.poll(() => readDaemonInstance(home), { timeout: 20_000 }).toBeNull();
     await expect(page.getByRole("button", { name: "Stop daemon", exact: true })).toBeHidden();
     await page.screenshot({ path: path.join(root, "attached-daemon-stopped.png") });

@@ -22,7 +22,7 @@ async function port() {
 }
 
 async function fixture() {
-  const root = await mkdtemp(path.join(tmpdir(), "paseo-lifecycle-"));
+  const root = await mkdtemp(path.join(tmpdir(), "paseo lifecycle "));
   const env = {
     ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("PASEO_"))),
     HOME: root,
