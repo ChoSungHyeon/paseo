@@ -30,6 +30,8 @@ import {
   ScheduleLogsRequestSchema,
   SchedulePauseRequestSchema,
   ScheduleResumeRequestSchema,
+  ScheduleStateRestoreRequestSchema,
+  ScheduleStateTransitionRequestSchema,
   ScheduleDeleteRequestSchema,
   ScheduleRunOnceRequestSchema,
   ScheduleUpdateRequestSchema,
@@ -39,6 +41,8 @@ import {
   ScheduleLogsResponseSchema,
   SchedulePauseResponseSchema,
   ScheduleResumeResponseSchema,
+  ScheduleStateRestoreResponseSchema,
+  ScheduleStateTransitionResponseSchema,
   ScheduleDeleteResponseSchema,
   ScheduleRunOnceResponseSchema,
   ScheduleUpdateResponseSchema,
@@ -3255,6 +3259,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ScheduleLogsRequestSchema,
   SchedulePauseRequestSchema,
   ScheduleResumeRequestSchema,
+  ScheduleStateTransitionRequestSchema,
+  ScheduleStateRestoreRequestSchema,
   ScheduleDeleteRequestSchema,
   ScheduleRunOnceRequestSchema,
   ScheduleUpdateRequestSchema,
@@ -3444,6 +3450,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceLabels: z.boolean().optional(),
         // COMPAT(workspaceSetupRun): added in v0.8.0, remove gate after 2027-09-02.
         workspaceSetupRun: z.boolean().optional(),
+        // COMPAT(scheduleStateRestore): added in v0.8.0; remove gate after 2027-03-10.
+        scheduleStateRestore: z.boolean().optional(),
         // COMPAT(workspaceTerminals): added in v0.8.0, remove gate after 2027-09-05.
         workspaceTerminals: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.2.0-beta.1. Remove the
@@ -6661,6 +6669,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ScheduleLogsResponseSchema,
   SchedulePauseResponseSchema,
   ScheduleResumeResponseSchema,
+  ScheduleStateTransitionResponseSchema,
+  ScheduleStateRestoreResponseSchema,
   ScheduleDeleteResponseSchema,
   ScheduleRunOnceResponseSchema,
   ScheduleUpdateResponseSchema,
@@ -6837,6 +6847,8 @@ export type ScheduleInspectResponse = z.infer<typeof ScheduleInspectResponseSche
 export type ScheduleLogsResponse = z.infer<typeof ScheduleLogsResponseSchema>;
 export type SchedulePauseResponse = z.infer<typeof SchedulePauseResponseSchema>;
 export type ScheduleResumeResponse = z.infer<typeof ScheduleResumeResponseSchema>;
+export type ScheduleStateTransitionResponse = z.infer<typeof ScheduleStateTransitionResponseSchema>;
+export type ScheduleStateRestoreResponse = z.infer<typeof ScheduleStateRestoreResponseSchema>;
 export type ScheduleDeleteResponse = z.infer<typeof ScheduleDeleteResponseSchema>;
 export type ScheduleRunOnceResponse = z.infer<typeof ScheduleRunOnceResponseSchema>;
 export type ScheduleUpdateResponse = z.infer<typeof ScheduleUpdateResponseSchema>;
@@ -6905,6 +6917,8 @@ export type ScheduleInspectRequest = z.infer<typeof ScheduleInspectRequestSchema
 export type ScheduleLogsRequest = z.infer<typeof ScheduleLogsRequestSchema>;
 export type SchedulePauseRequest = z.infer<typeof SchedulePauseRequestSchema>;
 export type ScheduleResumeRequest = z.infer<typeof ScheduleResumeRequestSchema>;
+export type ScheduleStateTransitionRequest = z.infer<typeof ScheduleStateTransitionRequestSchema>;
+export type ScheduleStateRestoreRequest = z.infer<typeof ScheduleStateRestoreRequestSchema>;
 export type ScheduleDeleteRequest = z.infer<typeof ScheduleDeleteRequestSchema>;
 export type ScheduleRunOnceRequest = z.infer<typeof ScheduleRunOnceRequestSchema>;
 export type ScheduleUpdateRequest = z.infer<typeof ScheduleUpdateRequestSchema>;

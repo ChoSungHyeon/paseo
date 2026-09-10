@@ -53,7 +53,8 @@ $PASEO_HOME/
 │   └── {sanitized-cwd}/
 │       └── {agentId}.json               # One file per agent
 ├── schedules/
-│   └── {scheduleId}.json                # One file per schedule
+│   ├── {scheduleId}.json                # One file per schedule
+│   └── operations/{sha256(operationId)}.json # Exact state transition receipts
 ├── projects/
 │   ├── projects.json                    # Project registry
 │   ├── workspaces.json                  # Workspace registry
@@ -395,22 +396,28 @@ Paseo uses these paths under the configured OpenAI base URL:
 
 One file per schedule. ID is 8 hex characters.
 
-| Field       | Type                                  | Description                      |
-| ----------- | ------------------------------------- | -------------------------------- |
-| `id`        | `string`                              | 8-char hex ID                    |
-| `name`      | `string?`                             | Human-readable name              |
-| `prompt`    | `string`                              | The prompt to send               |
-| `cadence`   | `ScheduleCadence`                     | Timing (see below)               |
-| `target`    | `ScheduleTarget`                      | What to run (see below)          |
-| `status`    | `"active" \| "paused" \| "completed"` | Current state                    |
-| `createdAt` | `string` (ISO 8601)                   |                                  |
-| `updatedAt` | `string` (ISO 8601)                   |                                  |
-| `nextRunAt` | `string?` (ISO 8601)                  | Next scheduled execution         |
-| `lastRunAt` | `string?` (ISO 8601)                  | Last execution time              |
-| `pausedAt`  | `string?` (ISO 8601)                  | When paused                      |
-| `expiresAt` | `string?` (ISO 8601)                  | Auto-expire time                 |
-| `maxRuns`   | `number?`                             | Max executions before completing |
-| `runs`      | `ScheduleRun[]`                       | Execution history                |
+| Field              | Type                                  | Description                             |
+| ------------------ | ------------------------------------- | --------------------------------------- |
+| `id`               | `string`                              | 8-char hex ID                           |
+| `name`             | `string?`                             | Human-readable name                     |
+| `prompt`           | `string`                              | The prompt to send                      |
+| `cadence`          | `ScheduleCadence`                     | Timing (see below)                      |
+| `target`           | `ScheduleTarget`                      | What to run (see below)                 |
+| `status`           | `"active" \| "paused" \| "completed"` | Current state                           |
+| `createdAt`        | `string` (ISO 8601)                   |                                         |
+| `updatedAt`        | `string` (ISO 8601)                   |                                         |
+| `nextRunAt`        | `string?` (ISO 8601)                  | Next scheduled execution                |
+| `lastRunAt`        | `string?` (ISO 8601)                  | Last execution time                     |
+| `pausedAt`         | `string?` (ISO 8601)                  | When paused                             |
+| `expiresAt`        | `string?` (ISO 8601)                  | Auto-expire time                        |
+| `maxRuns`          | `number?`                             | Max executions before completing        |
+| `runs`             | `ScheduleRun[]`                       | Execution history                       |
+| `_mutationVersion` | `{ generation, sequence }`            | Internal managed-write ownership marker |
+
+Older schedule files acquire a deterministic generation when read and persist it on their next
+managed write. Every later write advances the sequence. Exact state transition receipts live under
+`schedules/operations/`; see [Exact schedule state restore](schedule-state-restore.md) for their
+ownership and recovery contract.
 
 ### Nested: ScheduleCadence (discriminated union on `type`)
 

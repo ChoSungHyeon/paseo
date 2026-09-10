@@ -862,6 +862,107 @@ test("sends new-agent run options when creating schedules", async () => {
   });
 });
 
+test("gates and sends exact schedule state operations", async () => {
+  const legacyMock = createMockTransport();
+  const legacyClient = new DaemonClient({
+    url: "ws://legacy",
+    clientId: "clsk_schedule_restore_legacy",
+    reconnect: { enabled: false },
+    transportFactory: () => legacyMock.transport,
+  });
+  clients.push(legacyClient);
+  const legacyConnect = legacyClient.connect();
+  legacyMock.triggerOpen();
+  await legacyConnect;
+  await expect(
+    legacyClient.scheduleStateTransition({
+      id: "schedule-1",
+      operationId: "operation-1",
+      targetStatus: "paused",
+    }),
+  ).rejects.toThrow("does not support exact schedule state restoration");
+  expect(legacyMock.sent).toHaveLength(0);
+
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://supported",
+    clientId: "clsk_schedule_restore_supported",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connect = client.connect();
+  mock.triggerOpen({ features: { scheduleStateRestore: true } });
+  await connect;
+
+  const transition = client.scheduleStateTransition({
+    id: "schedule-1",
+    operationId: "operation-1",
+    targetStatus: "paused",
+    requestId: "request-1",
+  });
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "schedule.state.transition.request",
+    requestId: "request-1",
+    operationId: "operation-1",
+    scheduleId: "schedule-1",
+    targetStatus: "paused",
+  });
+  const schedule = {
+    id: "schedule-1",
+    name: null,
+    prompt: "p",
+    cadence: { type: "every", everyMs: 60_000 },
+    target: { type: "agent", agentId: "00000000-0000-4000-8000-000000000001" },
+    status: "paused",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:01.000Z",
+    nextRunAt: null,
+    lastRunAt: null,
+    pausedAt: "2026-01-01T00:00:01.000Z",
+    expiresAt: null,
+    maxRuns: null,
+  };
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "schedule.state.transition.response",
+      payload: {
+        requestId: "request-1",
+        operationId: "operation-1",
+        schedule,
+        replayed: false,
+        isCurrent: true,
+      },
+    }),
+  );
+  await expect(transition).resolves.toMatchObject({ replayed: false, isCurrent: true });
+
+  const restore = client.scheduleStateRestore({
+    id: "schedule-1",
+    operationId: "operation-1",
+    requestId: "request-2",
+  });
+  expect(parseSentFrame(mock.sent[1])).toEqual({
+    type: "schedule.state.restore.request",
+    requestId: "request-2",
+    operationId: "operation-1",
+    scheduleId: "schedule-1",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "schedule.state.restore.response",
+      payload: {
+        requestId: "request-2",
+        operationId: "operation-1",
+        schedule: { ...schedule, status: "active", pausedAt: null },
+        replayed: false,
+        isCurrent: true,
+      },
+    }),
+  );
+  await expect(restore).resolves.toMatchObject({ replayed: false, isCurrent: true });
+});
+
 test("sends new-agent run options when updating schedules", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

@@ -2722,6 +2722,10 @@ export class Session {
         return this.scheduleSession.handleSchedulePauseRequest(msg);
       case "schedule/resume":
         return this.scheduleSession.handleScheduleResumeRequest(msg);
+      case "schedule.state.transition.request":
+        return this.scheduleSession.handleScheduleStateTransitionRequest(msg);
+      case "schedule.state.restore.request":
+        return this.scheduleSession.handleScheduleStateRestoreRequest(msg);
       case "schedule/delete":
         return this.scheduleSession.handleScheduleDeleteRequest(msg);
       case "schedule/run-once":

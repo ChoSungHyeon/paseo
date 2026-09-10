@@ -542,6 +542,14 @@ type ScheduleResumePayload = Extract<
   SessionOutboundMessage,
   { type: "schedule/resume/response" }
 >["payload"];
+type ScheduleStateTransitionPayload = Extract<
+  SessionOutboundMessage,
+  { type: "schedule.state.transition.response" }
+>["payload"];
+type ScheduleStateRestorePayload = Extract<
+  SessionOutboundMessage,
+  { type: "schedule.state.restore.response" }
+>["payload"];
 type ScheduleDeletePayload = Extract<
   SessionOutboundMessage,
   { type: "schedule/delete/response" }
@@ -764,6 +772,13 @@ export interface CreateScheduleOptions {
 export interface InspectScheduleOptions {
   id: string;
   requestId?: string;
+}
+export interface TransitionScheduleStateOptions extends InspectScheduleOptions {
+  operationId: string;
+  targetStatus: "active" | "paused";
+}
+export interface RestoreScheduleStateOptions extends InspectScheduleOptions {
+  operationId: string;
 }
 export interface UpdateScheduleNewAgentConfig {
   provider?: string;
@@ -5669,6 +5684,43 @@ export class DaemonClient {
       },
       responseType: "schedule/resume/response",
     });
+  }
+
+  async scheduleStateTransition(
+    options: TransitionScheduleStateOptions,
+  ): Promise<ScheduleStateTransitionPayload> {
+    this.assertScheduleStateRestoreSupported();
+    return this.sendCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "schedule.state.transition.request",
+        operationId: options.operationId,
+        scheduleId: options.id,
+        targetStatus: options.targetStatus,
+      },
+      responseType: "schedule.state.transition.response",
+    });
+  }
+
+  async scheduleStateRestore(
+    options: RestoreScheduleStateOptions,
+  ): Promise<ScheduleStateRestorePayload> {
+    this.assertScheduleStateRestoreSupported();
+    return this.sendCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "schedule.state.restore.request",
+        operationId: options.operationId,
+        scheduleId: options.id,
+      },
+      responseType: "schedule.state.restore.response",
+    });
+  }
+
+  private assertScheduleStateRestoreSupported(): void {
+    if (this.lastServerInfoMessage?.features?.scheduleStateRestore !== true) {
+      throw new Error("This host does not support exact schedule state restoration; update Paseo");
+    }
   }
 
   async scheduleDelete(options: InspectScheduleOptions): Promise<ScheduleDeletePayload> {
