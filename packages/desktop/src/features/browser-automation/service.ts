@@ -162,8 +162,8 @@ async function runSerializedPixelCapture<T>(capture: () => Promise<T>): Promise<
 async function capturePixelFrameWithRetry<T>(
   contents: TabContents,
   capture: () => Promise<T>,
+  deadline: number,
 ): Promise<T> {
-  const deadline = Date.now() + PIXEL_CAPTURE_TIMEOUT_MS;
   while (Date.now() < deadline) {
     try {
       contents.invalidate();
@@ -190,13 +190,14 @@ function isKnownNoFrameCaptureError(error: unknown): boolean {
   );
 }
 
-async function waitForPaint(contents: TabContents): Promise<void> {
+async function waitForPaint(contents: TabContents, deadline: number): Promise<void> {
   // A hidden page may have unpainted DOM updates. The first animation callback
   // precedes paint; the next frame ensures capture cannot reuse the old surface.
   await withPixelCaptureTimeout(
     contents.executeJavaScript(
       "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))",
     ),
+    deadline - Date.now(),
   );
 }
 
@@ -206,8 +207,9 @@ async function runPaintedPixelCapture<T>(
 ): Promise<T> {
   return runSerializedPixelCapture(() =>
     contents.withFrameProduction(async () => {
-      await waitForPaint(contents);
-      return capturePixelFrameWithRetry(contents, capture);
+      const deadline = Date.now() + PIXEL_CAPTURE_TIMEOUT_MS;
+      await waitForPaint(contents, deadline);
+      return capturePixelFrameWithRetry(contents, capture, deadline);
     }),
   );
 }
