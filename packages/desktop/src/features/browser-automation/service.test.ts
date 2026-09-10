@@ -33,6 +33,9 @@ class FakeImage implements TabImage {
 }
 
 class FakeTab implements TabContents {
+  public withFrameProduction<T>(capture: () => Promise<T>): Promise<T> {
+    return capture();
+  }
   public readonly loadedUrls: string[] = [];
   public readonly scripts: string[] = [];
   public readonly actions: string[] = [];

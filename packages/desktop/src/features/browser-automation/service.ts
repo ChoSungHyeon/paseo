@@ -37,6 +37,7 @@ export interface TabContents {
   reload(): void;
   capturePage(options?: TabCapturePageOptions): Promise<TabImage>;
   invalidate(): void;
+  withFrameProduction<T>(capture: () => Promise<T>): Promise<T>;
   sendInputEvent(event: IsolatedKeyboardInputEvent): void;
   getConsoleMessages?(): BrowserAutomationConsoleLogEntry[];
   captureDialogs?<T>(
@@ -189,11 +190,26 @@ function isKnownNoFrameCaptureError(error: unknown): boolean {
   );
 }
 
+async function waitForPaint(contents: TabContents): Promise<void> {
+  // A hidden page may have unpainted DOM updates. The first animation callback
+  // precedes paint; the next frame ensures capture cannot reuse the old surface.
+  await withPixelCaptureTimeout(
+    contents.executeJavaScript(
+      "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))",
+    ),
+  );
+}
+
 async function runPaintedPixelCapture<T>(
   contents: TabContents,
   capture: () => Promise<T>,
 ): Promise<T> {
-  return runSerializedPixelCapture(() => capturePixelFrameWithRetry(contents, capture));
+  return runSerializedPixelCapture(() =>
+    contents.withFrameProduction(async () => {
+      await waitForPaint(contents);
+      return capturePixelFrameWithRetry(contents, capture);
+    }),
+  );
 }
 
 async function capturePaintedViewport(contents: TabContents): Promise<TabImage> {
