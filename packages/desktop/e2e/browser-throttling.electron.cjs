@@ -13,7 +13,8 @@ const output =
   process.env.PASEO_BROWSER_THROTTLING_ARTIFACT_DIR ||
   fs.mkdtempSync(path.join(os.tmpdir(), "paseo-browser-throttling-"));
 fs.mkdirSync(output, { recursive: true });
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), "paseo-browser-throttling-profile-"));
+const profile = process.env.PASEO_BROWSER_THROTTLING_PROFILE_DIR;
+assert.ok(profile, "Run through test:e2e:browser-throttling so the launcher owns profile cleanup");
 app.setPath("userData", profile);
 if (process.platform === "darwin") app.setActivationPolicy("accessory");
 const measurements = [];
@@ -157,4 +158,3 @@ app
     console.error(error);
     app.exit(1);
   });
-app.on("quit", () => fs.rmSync(profile, { recursive: true, force: true }));
