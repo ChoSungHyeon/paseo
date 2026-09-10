@@ -8,7 +8,7 @@ target status. The daemon records the schedule's `status`, `pausedAt`, and `next
 transition and the state it actually wrote. Call `schedule.state.restore.request` with the same
 operation ID and schedule ID to restore those three fields.
 
-The operation ID identifies a durable receipt. It grants no authority. Both RPCs require
+The operation ID identifies a persisted receipt. It grants no authority. Both RPCs require
 `automation.manage`, and a receipt cannot be used with another schedule. Repeating a request after a
 lost response returns the recorded result without applying the transition again. `replayed` says the
 response came from an existing receipt; `isCurrent` says the recorded result still matches the live
@@ -32,9 +32,13 @@ startup does not sweep receipts.
 
 ## Scope
 
-Schedule mutations are serialized inside one daemon process. The journal is crash durable, but it
-does not fence multiple daemon or external filesystem writers. Do not point two daemons at one
-`PASEO_HOME`.
+Schedule mutations are serialized inside one daemon process. The verified recovery boundary is a
+daemon process exit followed by a retry after the prepared or schedule-file rename completed. The
+atomic writer uses a temporary file and rename but does not `fsync` the file or parent directory, so
+receipt and schedule writes are not guaranteed to survive or retain order across host power loss.
+
+The journal does not fence multiple daemon or external filesystem writers. Do not point two daemons
+at one `PASEO_HOME`.
 
 Restore changes only `status`, `pausedAt`, and `nextRunAt`. It does not undo cadence, target, run
 history, expiry, or other schedule changes. Those changes invalidate the receipt instead. Operation
