@@ -48,16 +48,16 @@ async function openParkedBrowser() {
     `<style>html,body{margin:0;width:640px}section{height:480px}#top{background:rgb(255,0,0)}#bottom{background:rgb(0,0,255)}</style><section id="top">TOP</section><section id="bottom">BOTTOM</section><script>window.frameCount=0;function tick(){window.frameCount++;requestAnimationFrame(tick)}requestAnimationFrame(tick)</script>`,
   );
   await win.webContents.executeJavaScript(
-    `(() => { const view = document.createElement('webview'); view.style.cssText='display:inline-flex;width:640px;height:480px'; view.src=${JSON.stringify(url)}; document.getElementById('parking').appendChild(view); })()`,
+    `new Promise(resolve => { const view = document.createElement('webview'); view.addEventListener('dom-ready', () => resolve(), { once: true }); view.style.cssText='display:inline-flex;width:640px;height:480px'; view.src=${JSON.stringify(url)}; document.getElementById('parking').appendChild(view); })`,
   );
   const guest = await attached;
-  if (guest.isLoading()) await new Promise((resolve) => guest.once("did-finish-load", resolve));
   win.showInactive();
   return { win, guest };
 }
 
 async function expectBrowserToAnimate(guest) {
   const start = await guest.executeJavaScript("window.frameCount");
+  assert.equal(typeof start, "number", "Animation fixture must be loaded before sampling");
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline) {
     if ((await guest.executeJavaScript("window.frameCount")) > start + 2) return;
