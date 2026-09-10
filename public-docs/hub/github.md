@@ -79,4 +79,8 @@ env:
   SOME_TOKEN: "${{ paseo.connections.some-connection.token }}"
 ```
 
-Hub persists resolved values as private execution data so it can recover after a restart. Authored configuration retains the expressions. See [Hub security](/docs/hub/security) for provider and host boundaries.
+Hub persists resolved values as private execution data so it can recover after a restart. Authored configuration retains the expressions.
+
+These values are stored in the Hub database without application-level encryption. Protect database access, storage, and backups as credentials. Hub deletes the execution authority record when the execution becomes terminal; token lease records remain until revocation succeeds or the token expires, so interrupted cleanup can resume. This cleanup is not a guarantee that every copy is erased: retained agent/session data and database backups may still contain resolved values. Token revocation ends access; it does not erase those copies. Backup retention and deletion remain the operator’s responsibility.
+
+See [Hub security](/docs/hub/security) for provider and host boundaries.
