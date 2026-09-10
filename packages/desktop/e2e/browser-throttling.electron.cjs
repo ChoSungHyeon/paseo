@@ -145,17 +145,16 @@ async function verifyBrowserLifecycle() {
   }
 }
 
-const deadline = setTimeout(() => {
+setTimeout(() => {
   console.error("Browser throttling regression timed out");
   app.exit(1);
 }, 30000);
 app
   .whenReady()
   .then(verifyBrowserLifecycle)
-  .then(() => app.quit())
+  .then(() => app.exit(0))
   .catch((error) => {
     console.error(error);
     app.exit(1);
-  })
-  .finally(() => clearTimeout(deadline));
-app.on("will-quit", () => fs.rmSync(profile, { recursive: true, force: true }));
+  });
+app.on("quit", () => fs.rmSync(profile, { recursive: true, force: true }));
