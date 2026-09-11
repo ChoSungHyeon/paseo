@@ -189,6 +189,39 @@ sends and receipt reads use the same permission path as ordinary agent messages.
 External registration or generation claims are not guard inputs and must be validated by their
 owning system.
 
+Read the target with `fetchAgent` and pass its full id and daemon-returned `updatedAt`:
+
+```typescript
+await client.sendAgentMessage(agent.id, text, {
+  messageId,
+  guard: {
+    expectedAgentId: agent.id,
+    expectedUpdatedAt: agent.updatedAt,
+    expectedStatus: "idle",
+    expectedArchivedAt: null,
+  },
+});
+```
+
+The existing `send_agent_message_request` carries the optional `guard`. Guarded SDK calls return
+`agentId`, `messageId`, `accepted`, `replayed`, `guard: { matched, reason }`, and `error`.
+Precondition failures return `accepted: false` with `agent_id_mismatch`, `updated_at_mismatch`,
+`not_idle`, or `archived`. Other delivery failures reject the SDK promise. A completed retry returns
+the historical acceptance with `replayed: true`; it does not recheck the current guard. Keep the
+original message bytes and guard when retrying the same id.
+
+`getAgentMessageReceipt({ id, messageId })` uses `agent.message.receipt.get.request` and
+`agent.message.receipt.get.response`. Both SDK operations require the daemon's
+`features.agentMessageSendGuard` flag. Receipt lookup returns `agentId`, `messageId`, and `state`;
+`pending` is an unknown outcome, not permission to resend under another id.
+
+At implementation commit `57d99793a81b2dd2859ced9996dd45d45decb7f8`, the isolated daemon test
+`packages/server/src/server/agent-message-send-guard.e2e.test.ts` verified that completed retries
+before and after daemon reconstruction caused one provider start in total. Stale timestamps,
+prefix or missing ids, running agents, and archived agents were rejected without another start.
+The receipt unit tests also covered concurrent requests and pending-outcome rejection after journal
+reconstruction. These checks do not exercise abrupt process termination.
+
 These receipts cover one daemon process and process-exit/retry recovery. Atomic JSON replacement
 does not fsync the file or parent directory, so host power-loss durability and write ordering are not
 guaranteed.
