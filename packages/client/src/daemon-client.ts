@@ -111,6 +111,7 @@ import type {
   PaseoConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
+  ArchiveWorkspaceTrigger,
   PluginListItem,
   PluginLogEntry,
   PluginSourceStatusItem,
@@ -2420,11 +2421,20 @@ export class DaemonClient {
     workspaceId: string,
     requestId?: string,
   ): Promise<ArchiveWorkspacePayload> {
+    return this.archiveWorkspaceWithOptions({ workspaceId, requestId, trigger: "api" });
+  }
+
+  async archiveWorkspaceWithOptions(options: {
+    workspaceId: string;
+    requestId?: string;
+    trigger: ArchiveWorkspaceTrigger;
+  }): Promise<ArchiveWorkspacePayload> {
     return this.sendCorrelatedSessionRequest({
-      requestId,
+      requestId: options.requestId,
       message: {
         type: "archive_workspace_request",
-        workspaceId,
+        workspaceId: options.workspaceId,
+        trigger: options.trigger,
       },
       responseType: "archive_workspace_response",
     });
