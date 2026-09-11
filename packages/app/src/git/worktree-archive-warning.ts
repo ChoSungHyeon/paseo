@@ -103,25 +103,29 @@ export function buildWorktreeArchiveRiskReasons(
   return reasons;
 }
 
-export function buildWorktreeArchiveConfirmationMessage(
-  input: WorktreeArchiveConfirmationInput,
-  labels: WorktreeArchiveWarningLabels = DEFAULT_WORKTREE_ARCHIVE_WARNING_LABELS,
-  options: { confirmClean?: boolean } = {},
-): string | null {
+export function buildWorktreeArchiveConfirmationMessage(options: {
+  input: WorktreeArchiveConfirmationInput;
+  labels?: WorktreeArchiveWarningLabels;
+  confirmClean?: boolean;
+}): string | null {
+  const labels = options.labels ?? DEFAULT_WORKTREE_ARCHIVE_WARNING_LABELS;
+  const input = options.input;
   const reasons = buildWorktreeArchiveRiskReasons(input, labels);
   if (reasons.length === 0) {
-    return options.confirmClean ? labels.cleanWorkspace : null;
+    return options.confirmClean === true ? labels.cleanWorkspace : null;
   }
 
   return reasons.join("\n");
 }
 
-export async function confirmRiskyWorktreeArchive(
-  input: WorktreeArchiveConfirmationInput,
-  labels: WorktreeArchiveWarningLabels = DEFAULT_WORKTREE_ARCHIVE_WARNING_LABELS,
-  options: { confirmClean?: boolean } = {},
-): Promise<boolean> {
-  const message = buildWorktreeArchiveConfirmationMessage(input, labels, options);
+export async function confirmRiskyWorktreeArchive(options: {
+  input: WorktreeArchiveConfirmationInput;
+  labels?: WorktreeArchiveWarningLabels;
+  confirmClean?: boolean;
+}): Promise<boolean> {
+  const labels = options.labels ?? DEFAULT_WORKTREE_ARCHIVE_WARNING_LABELS;
+  const input = options.input;
+  const message = buildWorktreeArchiveConfirmationMessage(options);
   if (!message) {
     return true;
   }

@@ -87,16 +87,16 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
     (trigger: ArchiveWorkspaceTrigger) => {
       void (async () => {
         if (workspaceKind === "worktree" || trigger === "shortcut") {
-          const confirmed = await confirmRiskyWorktreeArchive(
-            {
+          const confirmed = await confirmRiskyWorktreeArchive({
+            input: {
               workspaceName: name,
               isDirty,
               aheadOfOrigin,
               diffStat,
             },
-            warningLabels,
-            { confirmClean: trigger === "shortcut" },
-          );
+            labels: warningLabels,
+            confirmClean: trigger === "shortcut",
+          });
           if (!confirmed) {
             return;
           }
