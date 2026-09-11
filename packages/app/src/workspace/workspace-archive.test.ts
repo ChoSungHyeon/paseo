@@ -126,6 +126,21 @@ describe("archiveWorkspaceOptimistically", () => {
     expect(storedWorkspace(archived.id)).toBeUndefined();
   });
 
+  it("forwards the archive trigger to the daemon", async () => {
+    const archived = workspace();
+    getHostRuntimeStore().acceptWorkspaceSnapshots(SERVER_ID, [archived]);
+    const archiveWorkspace = vi.fn(async () => archivePayload({ workspaceId: archived.id }));
+    const client = createClient(archiveWorkspace);
+
+    await archiveWorkspaceOptimistically({
+      client,
+      workspace: target(),
+      trigger: "shortcut",
+    });
+
+    expect(archiveWorkspace).toHaveBeenCalledWith(archived.id, undefined, "shortcut");
+  });
+
   it("restores the workspace and clears pending state when the daemon rejects the archive", async () => {
     const archived = workspace();
     getHostRuntimeStore().acceptWorkspaceSnapshots(SERVER_ID, [archived]);

@@ -620,7 +620,7 @@ function StatusWorkspaceRowWithMenu({
 
   const handleArchive = useCallback(() => {
     if (isArchiving) return;
-    archiveController.archive();
+    archiveController.archive("menu");
   }, [archiveController, isArchiving]);
 
   const clipboard = useWorkspaceClipboardActions();
@@ -663,7 +663,7 @@ function StatusWorkspaceRowWithMenu({
     enabled: selected && !isArchiving,
     priority: 0,
     handle: () => {
-      handleArchive();
+      archiveController.archive("shortcut");
       return true;
     },
   });

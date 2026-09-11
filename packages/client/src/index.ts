@@ -537,7 +537,7 @@ export function createPaseoApi(daemonClient: DaemonClient): PaseoApi {
         return createWorkspaceHandle(result.workspace);
       },
       archive: (workspace, requestId) =>
-        daemonClient.archiveWorkspace(resolveWorkspaceId(workspace), requestId),
+        daemonClient.archiveWorkspace(resolveWorkspaceId(workspace), requestId, "api"),
       subscribe: (handler) =>
         daemonClient.on("workspace_update", (message) => {
           handler(message.payload);
@@ -647,7 +647,7 @@ function createWorkspaceHandleFactory(
       refresh,
       setTitle: (title, requestId) => daemonClient.setWorkspaceTitle(id, title, requestId),
       archive: async (requestId) => {
-        const result = await daemonClient.archiveWorkspace(id, requestId);
+        const result = await daemonClient.archiveWorkspace(id, requestId, "api");
         if (current) {
           current = { ...current, archivingAt: result.archivedAt };
         }

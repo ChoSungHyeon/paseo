@@ -18,6 +18,21 @@ describe("workspace archive warning for worktree backing", () => {
     ).toBeNull();
   });
 
+  it("requires a confirmation for clean workspaces when explicitly requested", () => {
+    expect(
+      buildWorktreeArchiveConfirmationMessage(
+        {
+          workspaceName: "feature",
+          isDirty: false,
+          aheadOfOrigin: 0,
+          diffStat: null,
+        },
+        undefined,
+        { confirmClean: true },
+      ),
+    ).toBe("This will archive the workspace and its agents.");
+  });
+
   it("explains uncommitted line changes", () => {
     expect(
       buildWorktreeArchiveRiskReasons({
