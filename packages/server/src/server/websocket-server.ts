@@ -1510,7 +1510,8 @@ export class VoiceAssistantWebSocketServer {
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
       features: {
         agentMessageSendGuard: true,
-        agentRequestReceipts: true,
+        // The broader receipt capability also promises keyed agent creation.
+        agentRequestReceipts: false,
         scheduleStateRestore: true,
         // COMPAT(providersSnapshot): keep optional until all clients rely on snapshot flow.
         providersSnapshot: true,

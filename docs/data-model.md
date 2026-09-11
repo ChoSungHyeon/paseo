@@ -185,6 +185,8 @@ Clients gate on `server_info.features.agentMessageSendGuard`. Guarded SDK calls 
 `getAgentMessageReceipt({ id, messageId })` returns `missing`, `pending`, or `completed` through
 `agent.message.receipt.get.request` / `.response`. Receipt input and output require the existing
 send-message input and output scopes respectively; the guard adds no permissions.
+The broader `agentRequestReceipts` capability remains false because it also promises keyed agent
+creation, which this backport does not add.
 
 Atomic rename protects process-exit retries, not power-loss durability: the writer does not fsync
 files or directories. Do not share one journal between daemon processes.

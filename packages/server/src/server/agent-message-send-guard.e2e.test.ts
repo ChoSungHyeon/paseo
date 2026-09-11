@@ -33,6 +33,7 @@ test("guards one exact idle agent and keeps message receipts across daemon resta
   try {
     await client.connect();
     expect(client.getLastServerInfoMessage()?.features?.agentMessageSendGuard).toBe(true);
+    expect(client.getLastServerInfoMessage()?.features?.agentRequestReceipts).toBe(false);
     await client.fetchAgents({ subscribe: { subscriptionId: "guarded-send" } });
     const agent = await client.createAgent({
       config: { ...getFullAccessConfig("codex"), cwd },
