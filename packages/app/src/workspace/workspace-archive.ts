@@ -14,11 +14,10 @@ export interface WorkspaceArchiveTarget {
 }
 
 interface WorkspaceArchiveClient {
-  archiveWorkspace: (
-    workspaceId: string,
-    requestId?: string,
-    trigger?: ArchiveWorkspaceTrigger,
-  ) => Promise<{ error: string | null }>;
+  archiveWorkspaceWithOptions: (options: {
+    workspaceId: string;
+    trigger: ArchiveWorkspaceTrigger;
+  }) => Promise<{ error: string | null }>;
 }
 
 interface OptimisticWorkspaceArchiveSnapshot {
@@ -77,9 +76,12 @@ function restoreOptimisticallyHiddenWorkspace(input: {
 async function archiveWorkspaceOrThrow(input: {
   client: WorkspaceArchiveClient;
   workspaceId: string;
-  trigger?: ArchiveWorkspaceTrigger;
+  trigger: ArchiveWorkspaceTrigger;
 }): Promise<void> {
-  const payload = await input.client.archiveWorkspace(input.workspaceId, undefined, input.trigger);
+  const payload = await input.client.archiveWorkspaceWithOptions({
+    workspaceId: input.workspaceId,
+    trigger: input.trigger,
+  });
   if (payload.error) {
     throw new Error(payload.error);
   }
@@ -88,7 +90,7 @@ async function archiveWorkspaceOrThrow(input: {
 export async function archiveWorkspaceOptimistically(input: {
   client: WorkspaceArchiveClient;
   workspace: WorkspaceArchiveTarget;
-  trigger?: ArchiveWorkspaceTrigger;
+  trigger: ArchiveWorkspaceTrigger;
 }): Promise<void> {
   const snapshot = hideWorkspaceOptimistically(input.workspace);
 
@@ -127,6 +129,7 @@ export async function archiveWorkspacesOptimistically(input: {
         await archiveWorkspaceOptimistically({
           client,
           workspace,
+          trigger: "api",
         });
       } catch (error) {
         throw {

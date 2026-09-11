@@ -59,9 +59,9 @@ function target(input?: Partial<WorkspaceArchiveTarget>): WorkspaceArchiveTarget
 }
 
 function createClient(
-  archiveWorkspace: DaemonClient["archiveWorkspace"],
-): Pick<DaemonClient, "archiveWorkspace"> {
-  return { archiveWorkspace };
+  archiveWorkspaceWithOptions: DaemonClient["archiveWorkspaceWithOptions"],
+): Pick<DaemonClient, "archiveWorkspaceWithOptions"> {
+  return { archiveWorkspaceWithOptions };
 }
 
 function deferred<T>(): {
@@ -110,6 +110,7 @@ describe("archiveWorkspaceOptimistically", () => {
     const archive = archiveWorkspaceOptimistically({
       client,
       workspace: target(),
+      trigger: "menu",
     });
 
     expect(storedWorkspace(archived.id)).toBeUndefined();
@@ -129,8 +130,10 @@ describe("archiveWorkspaceOptimistically", () => {
   it("forwards the archive trigger to the daemon", async () => {
     const archived = workspace();
     getHostRuntimeStore().acceptWorkspaceSnapshots(SERVER_ID, [archived]);
-    const archiveWorkspace = vi.fn(async () => archivePayload({ workspaceId: archived.id }));
-    const client = createClient(archiveWorkspace);
+    const archiveWorkspaceWithOptions = vi.fn(async () =>
+      archivePayload({ workspaceId: archived.id }),
+    );
+    const client = createClient(archiveWorkspaceWithOptions);
 
     await archiveWorkspaceOptimistically({
       client,
@@ -138,7 +141,10 @@ describe("archiveWorkspaceOptimistically", () => {
       trigger: "shortcut",
     });
 
-    expect(archiveWorkspace).toHaveBeenCalledWith(archived.id, undefined, "shortcut");
+    expect(archiveWorkspaceWithOptions).toHaveBeenCalledWith({
+      workspaceId: archived.id,
+      trigger: "shortcut",
+    });
   });
 
   it("restores the workspace and clears pending state when the daemon rejects the archive", async () => {
@@ -152,6 +158,7 @@ describe("archiveWorkspaceOptimistically", () => {
       archiveWorkspaceOptimistically({
         client,
         workspace: target(),
+        trigger: "menu",
       }),
     ).rejects.toThrow("nope");
 
@@ -175,7 +182,7 @@ describe("archiveWorkspacesOptimistically", () => {
     });
     getHostRuntimeStore().acceptWorkspaceSnapshots(SERVER_ID, [first, second]);
     const client = createClient(
-      vi.fn(async (workspaceId) =>
+      vi.fn(async ({ workspaceId }) =>
         archivePayload({
           workspaceId,
           error: workspaceId === second.id ? "failed" : null,
@@ -207,7 +214,7 @@ describe("archiveWorkspacesOptimistically", () => {
 
     const archivedByServer = new Map<string, string[]>();
     const clientFor = (serverId: string) =>
-      createClient(async (workspaceId) => {
+      createClient(async ({ workspaceId }) => {
         archivedByServer.set(serverId, [...(archivedByServer.get(serverId) ?? []), workspaceId]);
         return archivePayload({ workspaceId });
       });
