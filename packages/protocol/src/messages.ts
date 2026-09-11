@@ -28,6 +28,8 @@ import {
   ScheduleLogsRequestSchema,
   SchedulePauseRequestSchema,
   ScheduleResumeRequestSchema,
+  ScheduleStateRestoreRequestSchema,
+  ScheduleStateTransitionRequestSchema,
   ScheduleDeleteRequestSchema,
   ScheduleRunOnceRequestSchema,
   ScheduleUpdateRequestSchema,
@@ -37,6 +39,8 @@ import {
   ScheduleLogsResponseSchema,
   SchedulePauseResponseSchema,
   ScheduleResumeResponseSchema,
+  ScheduleStateRestoreResponseSchema,
+  ScheduleStateTransitionResponseSchema,
   ScheduleDeleteResponseSchema,
   ScheduleRunOnceResponseSchema,
   ScheduleUpdateResponseSchema,
@@ -993,6 +997,14 @@ const ImageAttachmentSchema = z.object({
   mimeType: z.string(), // e.g., "image/jpeg", "image/png"
 });
 
+export const AgentMessageSendGuardSchema = z.object({
+  expectedAgentId: z.string(),
+  expectedUpdatedAt: z.string(),
+  expectedStatus: z.literal("idle"),
+  expectedArchivedAt: z.null(),
+});
+export type AgentMessageSendGuard = z.infer<typeof AgentMessageSendGuardSchema>;
+
 export const SendAgentMessageSchema = z.object({
   type: z.literal("send_agent_message"),
   agentId: z.string(),
@@ -1119,9 +1131,17 @@ export const SendAgentMessageRequestSchema = z.object({
   /** Accepts full ID, unique prefix, or exact full title (server resolves). */
   agentId: z.string(),
   text: z.string(),
+  guard: AgentMessageSendGuardSchema.optional(),
   messageId: z.string().optional(), // Client-provided ID for deduplication
   images: z.array(ImageAttachmentSchema).optional(),
   attachments: AgentAttachmentsSchema,
+});
+
+export const AgentMessageReceiptGetRequestSchema = z.object({
+  type: z.literal("agent.message.receipt.get.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+  messageId: z.string(),
 });
 
 export const WaitForFinishRequestSchema = z.object({
@@ -2464,6 +2484,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceRecoveryRestoreRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
+  AgentMessageReceiptGetRequestSchema,
   WaitForFinishRequestSchema,
   DaemonGetStatusRequestSchema,
   DaemonGetPairingOfferRequestSchema,
@@ -2589,6 +2610,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ScheduleLogsRequestSchema,
   SchedulePauseRequestSchema,
   ScheduleResumeRequestSchema,
+  ScheduleStateTransitionRequestSchema,
+  ScheduleStateRestoreRequestSchema,
   ScheduleDeleteRequestSchema,
   ScheduleRunOnceRequestSchema,
   ScheduleUpdateRequestSchema,
@@ -2763,6 +2786,10 @@ export const ServerInfoStatusPayloadSchema = z
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z
       .object({
+        // COMPAT(guardedDelivery): optional capabilities backported to v0.2.5.
+        agentRequestReceipts: z.boolean().optional(),
+        agentMessageSendGuard: z.boolean().optional(),
+        scheduleStateRestore: z.boolean().optional(),
         providersSnapshot: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
         // checkoutGithubSetAutoMerge fallback after 2026-12-28.
@@ -3727,6 +3754,27 @@ export const SendAgentMessageResponseMessageSchema = z.object({
     requestId: z.string(),
     agentId: z.string(),
     accepted: z.boolean(),
+    error: z.string().nullable(),
+    messageId: z.string().optional(),
+    replayed: z.boolean().optional(),
+    guard: z
+      .object({
+        matched: z.boolean(),
+        reason: z
+          .enum(["agent_id_mismatch", "updated_at_mismatch", "not_idle", "archived"])
+          .nullable(),
+      })
+      .optional(),
+  }),
+});
+
+export const AgentMessageReceiptGetResponseSchema = z.object({
+  type: z.literal("agent.message.receipt.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string(),
+    messageId: z.string(),
+    state: z.enum(["missing", "pending", "completed"]),
     error: z.string().nullable(),
   }),
 });
@@ -5238,6 +5286,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspaceCreateResponseSchema,
   WorkspaceClearAttentionResponseSchema,
   SendAgentMessageResponseMessageSchema,
+  AgentMessageReceiptGetResponseSchema,
   SetVoiceModeResponseMessageSchema,
   DaemonGetStatusResponseSchema,
   DaemonGetPairingOfferResponseSchema,
@@ -5341,6 +5390,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ScheduleLogsResponseSchema,
   SchedulePauseResponseSchema,
   ScheduleResumeResponseSchema,
+  ScheduleStateTransitionResponseSchema,
+  ScheduleStateRestoreResponseSchema,
   ScheduleDeleteResponseSchema,
   ScheduleRunOnceResponseSchema,
   ScheduleUpdateResponseSchema,
@@ -5432,6 +5483,7 @@ export type FetchAgentTimelineResponseMessage = z.infer<
 export type AgentForkContextResponseMessage = z.infer<typeof AgentForkContextResponseMessageSchema>;
 export type CancelAgentResponseMessage = z.infer<typeof CancelAgentResponseMessageSchema>;
 export type SendAgentMessageResponseMessage = z.infer<typeof SendAgentMessageResponseMessageSchema>;
+export type AgentMessageReceiptGetResponse = z.infer<typeof AgentMessageReceiptGetResponseSchema>;
 export type SetVoiceModeResponseMessage = z.infer<typeof SetVoiceModeResponseMessageSchema>;
 export type SetAgentModeResponseMessage = z.infer<typeof SetAgentModeResponseMessageSchema>;
 export type SetAgentModelResponseMessage = z.infer<typeof SetAgentModelResponseMessageSchema>;
@@ -5508,6 +5560,8 @@ export type ScheduleInspectResponse = z.infer<typeof ScheduleInspectResponseSche
 export type ScheduleLogsResponse = z.infer<typeof ScheduleLogsResponseSchema>;
 export type SchedulePauseResponse = z.infer<typeof SchedulePauseResponseSchema>;
 export type ScheduleResumeResponse = z.infer<typeof ScheduleResumeResponseSchema>;
+export type ScheduleStateTransitionResponse = z.infer<typeof ScheduleStateTransitionResponseSchema>;
+export type ScheduleStateRestoreResponse = z.infer<typeof ScheduleStateRestoreResponseSchema>;
 export type ScheduleDeleteResponse = z.infer<typeof ScheduleDeleteResponseSchema>;
 export type ScheduleRunOnceResponse = z.infer<typeof ScheduleRunOnceResponseSchema>;
 export type ScheduleUpdateResponse = z.infer<typeof ScheduleUpdateResponseSchema>;
@@ -5532,6 +5586,7 @@ export type ProjectListRequestMessage = z.infer<typeof ProjectListRequestMessage
 export type FetchAgentRequestMessage = z.infer<typeof FetchAgentRequestMessageSchema>;
 export type AgentForkContextRequestMessage = z.infer<typeof AgentForkContextRequestMessageSchema>;
 export type SendAgentMessageRequest = z.infer<typeof SendAgentMessageRequestSchema>;
+export type AgentMessageReceiptGetRequest = z.infer<typeof AgentMessageReceiptGetRequestSchema>;
 export type WaitForFinishRequest = z.infer<typeof WaitForFinishRequestSchema>;
 export type DictationStreamStartMessage = z.infer<typeof DictationStreamStartMessageSchema>;
 export type DictationStreamChunkMessage = z.infer<typeof DictationStreamChunkMessageSchema>;
@@ -5576,6 +5631,8 @@ export type ScheduleInspectRequest = z.infer<typeof ScheduleInspectRequestSchema
 export type ScheduleLogsRequest = z.infer<typeof ScheduleLogsRequestSchema>;
 export type SchedulePauseRequest = z.infer<typeof SchedulePauseRequestSchema>;
 export type ScheduleResumeRequest = z.infer<typeof ScheduleResumeRequestSchema>;
+export type ScheduleStateTransitionRequest = z.infer<typeof ScheduleStateTransitionRequestSchema>;
+export type ScheduleStateRestoreRequest = z.infer<typeof ScheduleStateRestoreRequestSchema>;
 export type ScheduleDeleteRequest = z.infer<typeof ScheduleDeleteRequestSchema>;
 export type ScheduleRunOnceRequest = z.infer<typeof ScheduleRunOnceRequestSchema>;
 export type ScheduleUpdateRequest = z.infer<typeof ScheduleUpdateRequestSchema>;

@@ -1,3 +1,4 @@
+import type { AgentMessageSendGuard } from "@getpaseo/protocol/messages";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { stat } from "node:fs/promises";
@@ -95,6 +96,25 @@ export class AgentManagerShuttingDownError extends Error {
     super("Agent manager is shutting down");
     this.name = "AgentManagerShuttingDownError";
   }
+}
+
+export type AgentMessageSendGuardFailureReason =
+  | "agent_id_mismatch"
+  | "updated_at_mismatch"
+  | "not_idle"
+  | "archived";
+
+export class AgentMessageSendGuardRejectedError extends Error {
+  constructor(readonly reason: AgentMessageSendGuardFailureReason) {
+    super(`agent_message_send_guard_rejected:${reason}`);
+    this.name = "AgentMessageSendGuardRejectedError";
+  }
+}
+
+export function isAgentMessageSendGuardRejectedError(
+  error: unknown,
+): error is AgentMessageSendGuardRejectedError {
+  return error instanceof AgentMessageSendGuardRejectedError;
 }
 
 export class AgentRunCancellationError extends Error {
@@ -556,6 +576,7 @@ function getFirstUserMessageTextFromRows(rows: readonly AgentTimelineRow[]): str
 }
 
 export class AgentManager {
+  private readonly lifecycleMutationTails = new Map<string, Promise<void>>();
   private readonly clients = new Map<AgentProvider, AgentClient>();
   private readonly providerEnabled = new Map<AgentProvider, boolean>();
   private readonly agents = new Map<string, LiveManagedAgent>();
@@ -1205,7 +1226,9 @@ export class AgentManager {
     options?: { rehydrateFromDisk?: boolean },
   ): Promise<ManagedAgent> {
     return this.trackAgentRegistrationOperation(
-      this.reloadAgentSessionInternal(agentId, overrides, options),
+      this.runLifecycleMutation(agentId, () =>
+        this.reloadAgentSessionInternal(agentId, overrides, options),
+      ),
     );
   }
 
@@ -1344,7 +1367,9 @@ export class AgentManager {
       return existing;
     }
 
-    const close = this.closeAgentRuntime(agentId);
+    const close = this.runLifecycleMutation(agentId, async () => {
+      if (this.agents.has(agentId)) await this.closeAgentRuntime(agentId);
+    });
     this.inFlightAgentCloses.set(agentId, close);
     const clearClose = () => {
       if (this.inFlightAgentCloses.get(agentId) === close) {
@@ -1418,6 +1443,10 @@ export class AgentManager {
   }
 
   async archiveAgent(agentId: string): Promise<{ archivedAt: string }> {
+    return this.runLifecycleMutation(agentId, () => this.archiveAgentUnlocked(agentId));
+  }
+
+  private async archiveAgentUnlocked(agentId: string): Promise<{ archivedAt: string }> {
     const agent = this.requireAgent(agentId);
     if (!this.registry) {
       throw new Error("Agent storage is not configured");
@@ -1432,8 +1461,8 @@ export class AgentManager {
     }
 
     const { archivedAt } = await this.markRecordArchived(stored);
-    agent.updatedAt = new Date(archivedAt);
-    await this.closeAgent(agentId);
+    this.touchUpdatedAt(agent);
+    await this.closeAgentRuntime(agentId);
     this.discardRetainedAgentState(agentId);
 
     await this.cascadeArchiveChildren(agentId);
@@ -1458,18 +1487,31 @@ export class AgentManager {
       if (record.labels?.[PARENT_AGENT_ID_LABEL] !== parentAgentId) {
         continue;
       }
-      if (this.agents.has(record.id)) {
-        await this.archiveAgent(record.id);
-      } else {
-        await this.archiveSnapshot(record.id, new Date().toISOString());
-      }
+      if (record.id === parentAgentId) continue;
+      await this.runLifecycleMutation(record.id, async () => {
+        const current = await registry.get(record.id);
+        if (
+          !current ||
+          current.archivedAt ||
+          current.labels?.[PARENT_AGENT_ID_LABEL] !== parentAgentId
+        )
+          return;
+        if (this.agents.has(record.id)) {
+          await this.archiveAgentUnlocked(record.id);
+        } else {
+          await this.archiveSnapshotUnlocked(record.id, new Date().toISOString());
+        }
+      });
     }
   }
 
   private async markRecordArchived(record: StoredAgentRecord): Promise<ArchivedStoredAgentRecord> {
     const registry = this.requireRegistry();
     const archivedAt = new Date().toISOString();
-    const archivedRecord = buildArchivedAgentRecord(record, { archivedAt, updatedAt: archivedAt });
+    const archivedRecord = buildArchivedAgentRecord(record, {
+      archivedAt,
+      updatedAt: this.nextStoredUpdatedAt(record),
+    });
 
     await registry.upsert(archivedRecord);
 
@@ -1615,6 +1657,10 @@ export class AgentManager {
   }
 
   async setTitle(agentId: string, title: string): Promise<void> {
+    return this.runLifecycleMutation(agentId, () => this.setTitleUnlocked(agentId, title));
+  }
+
+  private async setTitleUnlocked(agentId: string, title: string): Promise<void> {
     const agent = this.requireAgent(agentId);
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
@@ -1633,8 +1679,10 @@ export class AgentManager {
   }
 
   async setLabels(agentId: string, labels: Record<string, string>): Promise<void> {
-    const agent = this.requireAgent(agentId);
-    await this.writeLabels(agent.id, labels);
+    await this.runLifecycleMutation(agentId, async () => {
+      const agent = this.requireAgent(agentId);
+      await this.writeLabels(agent.id, labels);
+    });
   }
 
   private async writeLabels(agentId: string, patch: AgentLabelPatch): Promise<WriteLabelsResult> {
@@ -1673,6 +1721,14 @@ export class AgentManager {
   }
 
   async detachAgent(agentId: string): Promise<{
+    record: StoredAgentRecord;
+    live: boolean;
+    previousParentAgentId: string | null;
+  }> {
+    return this.runLifecycleMutation(agentId, () => this.detachAgentUnlocked(agentId));
+  }
+
+  private async detachAgentUnlocked(agentId: string): Promise<{
     record: StoredAgentRecord;
     live: boolean;
     previousParentAgentId: string | null;
@@ -1732,6 +1788,15 @@ export class AgentManager {
   }
 
   async archiveSnapshot(agentId: string, archivedAt: string): Promise<StoredAgentRecord> {
+    return this.runLifecycleMutation(agentId, () =>
+      this.archiveSnapshotUnlocked(agentId, archivedAt),
+    );
+  }
+
+  private async archiveSnapshotUnlocked(
+    agentId: string,
+    archivedAt: string,
+  ): Promise<StoredAgentRecord> {
     const registry = this.requireRegistry();
     const liveAgent = this.getAgent(agentId);
     if (liveAgent) {
@@ -1745,7 +1810,10 @@ export class AgentManager {
       throw new Error(`Agent not found: ${agentId}`);
     }
 
-    const nextRecord = buildArchivedAgentRecord(record, { archivedAt });
+    const nextRecord = buildArchivedAgentRecord(record, {
+      archivedAt,
+      updatedAt: this.nextStoredUpdatedAt(record),
+    });
     await registry.upsert(nextRecord);
 
     await this.archiveNativeSessionBestEffort(record.provider, record.persistence);
@@ -1769,6 +1837,15 @@ export class AgentManager {
     agentId: string,
     updates?: { workspaceId?: string; labels?: AgentLabelPatch },
   ): Promise<boolean> {
+    return this.runLifecycleMutation(agentId, () =>
+      this.unarchiveSnapshotUnlocked(agentId, updates),
+    );
+  }
+
+  private async unarchiveSnapshotUnlocked(
+    agentId: string,
+    updates?: { workspaceId?: string; labels?: AgentLabelPatch },
+  ): Promise<boolean> {
     const registry = this.requireRegistry();
     const record = await registry.get(agentId);
     if (!record || !record.archivedAt) {
@@ -1782,7 +1859,7 @@ export class AgentManager {
       ...(updates?.workspaceId ? { workspaceId: updates.workspaceId } : {}),
       ...(updates?.labels ? { labels: applyLabelPatch(record.labels, updates.labels) } : {}),
       archivedAt: null,
-      updatedAt: new Date().toISOString(),
+      updatedAt: this.nextStoredUpdatedAt(record),
     });
 
     if (this.getAgent(agentId)) {
@@ -1813,10 +1890,22 @@ export class AgentManager {
       labels?: Record<string, string>;
     },
   ): Promise<void> {
+    return this.runLifecycleMutation(agentId, () =>
+      this.updateAgentMetadataUnlocked(agentId, updates),
+    );
+  }
+
+  private async updateAgentMetadataUnlocked(
+    agentId: string,
+    updates: {
+      title?: string;
+      labels?: Record<string, string>;
+    },
+  ): Promise<void> {
     const liveAgent = this.getAgent(agentId);
     if (liveAgent) {
       if (updates.title) {
-        await this.setTitle(agentId, updates.title);
+        await this.setTitleUnlocked(agentId, updates.title);
       }
       if (updates.labels) {
         await this.writeLabels(agentId, updates.labels);
@@ -1825,6 +1914,53 @@ export class AgentManager {
     }
 
     await this.writeStoredMetadata(agentId, updates);
+  }
+
+  private async runLifecycleMutation<T>(agentId: string, mutation: () => Promise<T>): Promise<T> {
+    // Serialize guard checks with lifecycle and metadata mutations for this agent.
+    const previous = this.lifecycleMutationTails.get(agentId) ?? Promise.resolve();
+    const result = previous.catch(() => undefined).then(mutation);
+    const tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.lifecycleMutationTails.set(agentId, tail);
+    void tail.finally(() => {
+      if (this.lifecycleMutationTails.get(agentId) === tail) {
+        this.lifecycleMutationTails.delete(agentId);
+      }
+    });
+    return result;
+  }
+
+  async runGuardedAgentMessageSend<T>(
+    agentId: string,
+    guard: AgentMessageSendGuard,
+    send: () => Promise<T>,
+  ): Promise<T> {
+    return this.runLifecycleMutation(agentId, async () => {
+      if (agentId !== guard.expectedAgentId) {
+        throw new AgentMessageSendGuardRejectedError("agent_id_mismatch");
+      }
+
+      const record = await this.requireRegistry().get(agentId);
+      if (!record) {
+        throw new AgentMessageSendGuardRejectedError("agent_id_mismatch");
+      }
+      if (record.archivedAt) {
+        throw new AgentMessageSendGuardRejectedError("archived");
+      }
+
+      const agent = this.agents.get(agentId);
+      if (!agent || agent.lifecycle !== "idle" || this.hasInFlightRun(agentId)) {
+        throw new AgentMessageSendGuardRejectedError("not_idle");
+      }
+      if (agent.updatedAt.toISOString() !== guard.expectedUpdatedAt) {
+        throw new AgentMessageSendGuardRejectedError("updated_at_mismatch");
+      }
+
+      return send();
+    });
   }
 
   async runAgent(

@@ -1,3 +1,8 @@
+import type { AgentRequests } from "./agent/requests/index.js";
+import {
+  AgentMessageSendGuardRejectedError,
+  isAgentMessageSendGuardRejectedError,
+} from "./agent/agent-manager.js";
 import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
@@ -416,6 +421,7 @@ export interface SessionOptions {
   worktreesRoot?: string;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
+  agentRequests: Pick<AgentRequests, "send" | "inspectSend">;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
   filesystem?: SessionFileSystem;
@@ -503,7 +509,20 @@ function parseClientCapabilities(
   return new Set(result);
 }
 
+// New operations remain within the legacy grants, including response visibility.
+// Exact restoration can move in either direction, so both mutation grants are required.
+const LEGACY_RPC_GRANTS: Readonly<Record<string, readonly string[]>> = {
+  "agent.message.receipt.get.request": ["send_agent_message_request"],
+  "agent.message.receipt.get.response": ["send_agent_message_response"],
+  "schedule.state.transition.request": ["schedule/pause", "schedule/resume"],
+  "schedule.state.restore.request": ["schedule/pause", "schedule/resume"],
+  "schedule.state.transition.response": ["schedule/pause/response", "schedule/resume/response"],
+  "schedule.state.restore.response": ["schedule/pause/response", "schedule/resume/response"],
+};
+
 export function isSessionRpcAllowed(scopes: readonly string[], rpcName: string): boolean {
+  const grants = LEGACY_RPC_GRANTS[rpcName];
+  if (grants) return grants.every((grant) => isSessionRpcAllowed(scopes, grant));
   return scopes.some((scope) => {
     if (scope === "*" || scope === rpcName) {
       return true;
@@ -583,6 +602,7 @@ export class Session {
 
   private agentManager: AgentManager;
   private readonly agentStorage: AgentStorage;
+  private readonly agentRequests: Pick<AgentRequests, "send" | "inspectSend">;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly filesystem: SessionFileSystem;
@@ -661,6 +681,7 @@ export class Session {
       worktreesRoot,
       agentManager,
       agentStorage,
+      agentRequests,
       projectRegistry,
       workspaceRegistry,
       filesystem,
@@ -727,6 +748,7 @@ export class Session {
     });
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
+    this.agentRequests = agentRequests;
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
     this.filesystem = filesystem ?? nodeSessionFileSystem;
@@ -1934,6 +1956,8 @@ export class Session {
         return this.handleUpdateAgentRequest(msg.agentId, msg.name, msg.labels, msg.requestId);
       case "project.rename.request":
         return this.handleProjectRenameRequest(msg.projectId, msg.customName, msg.requestId);
+      case "agent.message.receipt.get.request":
+        return this.handleAgentMessageReceiptGetRequest(msg);
       case "send_agent_message_request":
         return this.handleSendAgentMessageRequest(msg);
       case "wait_for_finish_request":
@@ -2227,6 +2251,10 @@ export class Session {
         return this.chatScheduleLoopSession.handleScheduleLogsRequest(msg);
       case "schedule/pause":
         return this.chatScheduleLoopSession.handleSchedulePauseRequest(msg);
+      case "schedule.state.transition.request":
+        return this.chatScheduleLoopSession.handleScheduleStateTransitionRequest(msg);
+      case "schedule.state.restore.request":
+        return this.chatScheduleLoopSession.handleScheduleStateRestoreRequest(msg);
       case "schedule/resume":
         return this.chatScheduleLoopSession.handleScheduleResumeRequest(msg);
       case "schedule/delete":
@@ -6323,6 +6351,8 @@ export class Session {
           agentId: msg.agentId,
           accepted: false,
           error: resolved.error,
+          ...(msg.messageId ? { messageId: msg.messageId, replayed: false } : {}),
+          ...(msg.guard ? { guard: { matched: false, reason: "agent_id_mismatch" as const } } : {}),
         },
       });
       return;
@@ -6330,6 +6360,10 @@ export class Session {
 
     try {
       const agentId = resolved.agentId;
+
+      if (msg.guard && msg.agentId !== msg.guard.expectedAgentId) {
+        throw new AgentMessageSendGuardRejectedError("agent_id_mismatch");
+      }
 
       const prompt = buildAgentPrompt(msg.text, msg.images, msg.attachments);
       this.sessionLogger.trace(
@@ -6340,57 +6374,48 @@ export class Session {
         },
         "agent.session.send_agent_message",
       );
-      let dispatchResult: { outOfBand: boolean };
-      try {
-        dispatchResult = await sendPromptToAgent({
+      const send = async () => {
+        const result = await sendPromptToAgent({
           agentManager: this.agentManager,
           agentStorage: this.agentStorage,
           agentId,
           prompt,
           messageId: msg.messageId,
+          guard: msg.guard,
           logger: this.sessionLogger,
         });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.handleAgentRunError(agentId, error, "Failed to send agent message");
-        this.emit({
-          type: "send_agent_message_response",
-          payload: {
-            requestId: msg.requestId,
-            agentId,
-            accepted: false,
-            error: message,
+        if (!msg.guard && !result.outOfBand) {
+          await waitForAgentRunStartWithTimeout(this.agentManager, agentId);
+        }
+      };
+      let replayed = false;
+      if (msg.messageId) {
+        const receipt = await this.agentRequests.send({
+          agentId,
+          messageId: msg.messageId,
+          request: {
+            prompt,
+            guard: msg.guard,
           },
-        });
-        return;
-      }
-
-      if (dispatchResult.outOfBand) {
-        this.emit({
-          type: "send_agent_message_response",
-          payload: {
-            requestId: msg.requestId,
-            agentId,
-            accepted: true,
-            error: null,
+          prepare: async () => {
+            if (msg.guard) {
+              const record = await this.agentStorage.get(agentId);
+              if (record?.archivedAt) {
+                throw new AgentMessageSendGuardRejectedError("archived");
+              }
+            }
+            await ensureAgentLoaded(agentId, {
+              agentManager: this.agentManager,
+              agentStorage: this.agentStorage,
+              logger: this.sessionLogger,
+            });
           },
+          send,
+          retrySafe: isAgentMessageSendGuardRejectedError,
         });
-        return;
-      }
-
-      try {
-        await waitForAgentRunStartWithTimeout(this.agentManager, agentId);
-      } catch (error) {
-        this.emit({
-          type: "send_agent_message_response",
-          payload: {
-            requestId: msg.requestId,
-            agentId,
-            accepted: false,
-            error: errorToFriendlyMessage(error),
-          },
-        });
-        return;
+        replayed = receipt.replayed;
+      } else {
+        await send();
       }
 
       this.emit({
@@ -6400,9 +6425,15 @@ export class Session {
           agentId,
           accepted: true,
           error: null,
+          ...(msg.messageId ? { messageId: msg.messageId, replayed } : {}),
+          ...(msg.guard ? { guard: { matched: true, reason: null } } : {}),
         },
       });
     } catch (error) {
+      const guardRejection = isAgentMessageSendGuardRejectedError(error) ? error : null;
+      if (!guardRejection) {
+        this.handleAgentRunError(resolved.agentId, error, "Failed to send agent message");
+      }
       this.emit({
         type: "send_agent_message_response",
         payload: {
@@ -6410,9 +6441,42 @@ export class Session {
           agentId: resolved.agentId,
           accepted: false,
           error: errorToFriendlyMessage(error),
+          ...(msg.messageId ? { messageId: msg.messageId, replayed: false } : {}),
+          ...(guardRejection ? { guard: { matched: false, reason: guardRejection.reason } } : {}),
         },
       });
     }
+  }
+
+  private async handleAgentMessageReceiptGetRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.message.receipt.get.request" }>,
+  ): Promise<void> {
+    const resolved = await this.resolveAgentIdentifier(msg.agentId);
+    if (!resolved.ok) {
+      this.emit({
+        type: "agent.message.receipt.get.response",
+        payload: {
+          requestId: msg.requestId,
+          agentId: msg.agentId,
+          messageId: msg.messageId,
+          state: "missing",
+          error: resolved.error,
+        },
+      });
+      return;
+    }
+
+    const state = await this.agentRequests.inspectSend(resolved.agentId, msg.messageId);
+    this.emit({
+      type: "agent.message.receipt.get.response",
+      payload: {
+        requestId: msg.requestId,
+        agentId: resolved.agentId,
+        messageId: msg.messageId,
+        state,
+        error: null,
+      },
+    });
   }
 
   private async handleWaitForFinish(

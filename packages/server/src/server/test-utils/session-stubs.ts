@@ -252,3 +252,16 @@ export function createProviderSnapshotManagerStub(): {
     destroy,
   };
 }
+
+export function createAgentRequestsStub(): SessionOptions["agentRequests"] {
+  return {
+    async send(input) {
+      await input.prepare?.();
+      await input.send();
+      return { replayed: false };
+    },
+    async inspectSend() {
+      return "missing";
+    },
+  };
+}
