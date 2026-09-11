@@ -12,6 +12,7 @@ export const ptBR: TranslationResources = {
       copy: "Copiar",
       copyLine: "Copiar linha",
       dismiss: "Dispensar",
+      reload: "Recarregar",
       retry: "Tentar novamente",
       search: "Buscar",
       select: "Selecionar",
@@ -1299,6 +1300,7 @@ export const ptBR: TranslationResources = {
       detail: "Parando o daemon local.",
     },
     daemon: {
+      lifecycle: en.desktop.daemon.lifecycle,
       title: "Daemon",
       status: {
         title: "Status",
