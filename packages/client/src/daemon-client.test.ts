@@ -963,6 +963,104 @@ test("gates and sends exact schedule state operations", async () => {
   await expect(restore).resolves.toMatchObject({ replayed: false, isCurrent: true });
 });
 
+test("gates guarded agent messages and exposes durable receipt state", async () => {
+  const guard = {
+    expectedAgentId: "agent-1",
+    expectedUpdatedAt: "2026-09-11T00:00:00.000Z",
+    expectedStatus: "idle" as const,
+    expectedArchivedAt: null,
+  };
+  const legacyMock = createMockTransport();
+  const legacyClient = new DaemonClient({
+    url: "ws://legacy-guard",
+    clientId: "clsk_guard_legacy",
+    reconnect: { enabled: false },
+    transportFactory: () => legacyMock.transport,
+  });
+  clients.push(legacyClient);
+  const legacyConnect = legacyClient.connect();
+  legacyMock.triggerOpen();
+  await legacyConnect;
+  await expect(
+    legacyClient.sendAgentMessage("agent-1", "run", { messageId: "message-1", guard }),
+  ).rejects.toThrow("does not support guarded agent messages");
+  expect(legacyMock.sent).toHaveLength(0);
+
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://guarded",
+    clientId: "clsk_guard_supported",
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+  const connect = client.connect();
+  mock.triggerOpen({ features: { agentMessageSendGuard: true } });
+  await connect;
+
+  const send = client.sendAgentMessage("agent-1", "run", {
+    messageId: "message-1",
+    guard,
+  });
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "send_agent_message_request",
+    requestId: expect.any(String),
+    agentId: "agent-1",
+    text: "run",
+    messageId: "message-1",
+    guard,
+  });
+  const sendRequest = parseSentFrame(mock.sent[0]);
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "send_agent_message_response",
+      payload: {
+        requestId: sendRequest.requestId,
+        agentId: "agent-1",
+        messageId: "message-1",
+        accepted: false,
+        replayed: false,
+        guard: { matched: false, reason: "not_idle" },
+        error: "agent_message_send_guard_rejected:not_idle",
+      },
+    }),
+  );
+  await expect(send).resolves.toMatchObject({
+    accepted: false,
+    replayed: false,
+    guard: { matched: false, reason: "not_idle" },
+  });
+
+  const receipt = client.getAgentMessageReceipt({
+    id: "agent-1",
+    messageId: "message-1",
+    requestId: "receipt-1",
+  });
+  expect(parseSentFrame(mock.sent[1])).toEqual({
+    type: "agent.message.receipt.get.request",
+    requestId: "receipt-1",
+    agentId: "agent-1",
+    messageId: "message-1",
+  });
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "agent.message.receipt.get.response",
+      payload: {
+        requestId: "receipt-1",
+        agentId: "agent-1",
+        messageId: "message-1",
+        state: "pending",
+        error: null,
+      },
+    }),
+  );
+  await expect(receipt).resolves.toEqual({
+    agentId: "agent-1",
+    messageId: "message-1",
+    state: "pending",
+  });
+});
+
 test("sends new-agent run options when updating schedules", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

@@ -52,6 +52,8 @@ $PASEO_HOME/
 ├── agents/
 │   └── {sanitized-cwd}/
 │       └── {agentId}.json               # One file per agent
+├── agent-requests/
+│   └── {sha256(request identity)}.json   # Agent create/send receipts
 ├── schedules/
 │   ├── {scheduleId}.json                # One file per schedule
 │   └── operations/{sha256(operationId)}.json # Exact state transition receipts
@@ -164,6 +166,32 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 | `icon`        | `string?`             |
 | `value`       | `string \| null`      |
 | `options`     | `AgentSelectOption[]` |
+
+---
+
+## Agent message delivery receipts
+
+`sendAgentMessage` accepts a stable `messageId`. The daemon stores a receipt under
+`$PASEO_HOME/agent-requests/`, keyed by the exact agent id and message id. A completed receipt makes
+same-request retries return `replayed: true` without calling the provider again. Reusing that key
+with different request bytes is rejected. If the daemon exits after provider dispatch but before
+the completed receipt write, the receipt remains `pending`; retries return
+`agent_request_outcome_unknown` instead of risking a duplicate provider call.
+
+Use `getAgentMessageReceipt` to read `missing`, `pending`, or `completed`. This is historical delivery
+state, not the agent's current status.
+
+The `agentMessageSendGuard` feature adds a guarded `sendAgentMessage` option. It compares only
+daemon-owned facts immediately before dispatch: the exact agent id, `updatedAt`, idle status, and a
+null `archivedAt`. A mismatch returns `accepted: false` without unarchiving, replacing a running
+turn, or retaining a send receipt. The guard is a precondition, not additional authority; guarded
+sends and receipt reads use the same permission path as ordinary agent messages.
+External registration or generation claims are not guard inputs and must be validated by their
+owning system.
+
+These receipts cover one daemon process and process-exit/retry recovery. Atomic JSON replacement
+does not fsync the file or parent directory, so host power-loss durability and write ordering are not
+guaranteed.
 
 ---
 
