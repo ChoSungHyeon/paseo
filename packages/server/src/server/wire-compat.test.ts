@@ -1,3 +1,4 @@
+import { createAgentRequestsStub } from "./test-utils/session-stubs.js";
 import pino from "pino";
 import { z } from "zod";
 import { describe, expect, test } from "vitest";
@@ -239,6 +240,7 @@ function createSessionForWireCompatTest(options?: {
   ];
 
   const session = new Session({
+    agentRequests: createAgentRequestsStub(),
     clientId: "wire-compat-client",
     scopes: ["*"],
     clientCapabilities: options?.clientCapabilities ?? null,

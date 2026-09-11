@@ -52,6 +52,7 @@ $PASEO_HOME/
 ├── agents/
 │   └── {sanitized-cwd}/
 │       └── {agentId}.json               # One file per agent
+├── agent-requests/                     # Durable message delivery receipts
 ├── schedules/
 │   └── {scheduleId}.json                # One file per schedule
 ├── chat/
@@ -163,6 +164,32 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 | `options`     | `AgentSelectOption[]` |
 
 ---
+
+## Agent message delivery receipts
+
+A stable `messageId` on `send_agent_message_request` deduplicates delivery for one exact agent.
+The daemon owns one journal shared by all socket sessions. Reusing an ID with a different prompt
+or guard returns `agent_request_key_conflict`. A completed receipt replays the original acceptance;
+it does not recheck the guard. A pending receipt after process exit returns
+`agent_request_outcome_unknown` because the provider may already have received the message.
+Receipts are retained; pruning and multi-process writers are outside this contract.
+
+The optional `guard` requires `expectedAgentId`, `expectedUpdatedAt`, `expectedStatus: "idle"`, and
+`expectedArchivedAt: null`. The daemon checks those facts inside the agent's lifecycle mutation
+queue immediately before dispatch. A mismatch rejects without unarchiving, replacing a running
+turn, or retaining a pending receipt. The timestamp is daemon-owned. External registration or
+generation claims are not authority and are not guard inputs.
+
+Clients gate on `server_info.features.agentMessageSendGuard`. Guarded SDK calls return
+`{ agentId, messageId, accepted, replayed, guard: { matched, reason }, error }`.
+`getAgentMessageReceipt({ id, messageId })` returns `missing`, `pending`, or `completed` through
+`agent.message.receipt.get.request` / `.response`. Receipt input and output require the existing
+send-message input and output scopes respectively; the guard adds no permissions.
+The broader `agentRequestReceipts` capability remains false because it also promises keyed agent
+creation, which this backport does not add.
+
+Atomic rename protects process-exit retries, not power-loss durability: the writer does not fsync
+files or directories. Do not share one journal between daemon processes.
 
 ## Runtime-only Terminal Sessions
 
@@ -279,6 +306,8 @@ Paseo uses these paths under the configured OpenAI base URL:
 **Path:** `$PASEO_HOME/schedules/{id}.json`
 
 One file per schedule. ID is 8 hex characters.
+
+Exact temporary schedule changes use [ownership-checked state restoration](schedule-state-restore.md).
 
 | Field       | Type                                  | Description                      |
 | ----------- | ------------------------------------- | -------------------------------- |

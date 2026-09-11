@@ -1,7 +1,12 @@
+import type { AgentMessageSendGuard } from "@getpaseo/protocol/messages";
 import type { Logger } from "pino";
 
 import type { AgentPromptInput, AgentRunOptions } from "./agent-sdk-types.js";
-import type { AgentManager, ManagedAgent } from "./agent-manager.js";
+import {
+  AgentMessageSendGuardRejectedError,
+  type AgentManager,
+  type ManagedAgent,
+} from "./agent-manager.js";
 import type { AgentStorage } from "./agent-storage.js";
 import { ensureAgentLoaded } from "./agent-loading.js";
 import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
@@ -126,6 +131,7 @@ export interface SendPromptToAgentParams {
   /** Prompt to dispatch to the provider (may include image blocks or wrapped text). */
   prompt: AgentPromptInput;
   messageId?: string;
+  guard?: AgentMessageSendGuard;
   runOptions?: AgentRunOptions;
   /** Optional mode to set on the agent before the run starts. */
   sessionMode?: string;
@@ -181,6 +187,7 @@ export async function sendPromptToAgent(
 
   const record = await params.agentStorage.get(params.agentId);
   if (record?.archivedAt) {
+    if (params.guard) throw new AgentMessageSendGuardRejectedError("archived");
     if (!unarchive) {
       return { outOfBand: false };
     }
@@ -193,6 +200,10 @@ export async function sendPromptToAgent(
     logger: params.logger,
   });
 
+  if (params.guard && params.sessionMode) {
+    throw new Error("A guarded send cannot change session mode");
+  }
+
   if (params.sessionMode) {
     await params.agentManager.setAgentMode(params.agentId, params.sessionMode);
   }
@@ -200,6 +211,28 @@ export async function sendPromptToAgent(
   const runOptions = params.messageId
     ? { ...params.runOptions, clientMessageId: params.messageId }
     : params.runOptions;
+
+  if (params.guard) {
+    return params.agentManager.runGuardedAgentMessageSend(
+      params.agentId,
+      params.guard,
+      async () => {
+        const result = await startAgentRun(
+          params.agentManager,
+          params.agentId,
+          params.prompt,
+          params.logger,
+          {
+            replaceRunning: false,
+            runOptions,
+          },
+        );
+        if (!result.outOfBand)
+          await waitForAgentRunStartWithTimeout(params.agentManager, params.agentId);
+        return result;
+      },
+    );
+  }
 
   return await startAgentRun(params.agentManager, params.agentId, params.prompt, params.logger, {
     replaceRunning: true,

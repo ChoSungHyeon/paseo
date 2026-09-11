@@ -1,3 +1,4 @@
+import { createAgentRequestsStub } from "./test-utils/session-stubs.js";
 import { execSync } from "child_process";
 import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -352,6 +353,7 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
   const messages = options.messages ?? [];
 
   const sessionOptions: SessionOptions = {
+    agentRequests: createAgentRequestsStub(),
     clientId: "test-client",
     onMessage: (message) => messages.push(message),
     ...(options.targetedMessages
@@ -422,6 +424,81 @@ function createSessionForTest(options: SessionForTestOptions = {}): Session {
 }
 
 describe("session authorization scopes", () => {
+  test("new delivery RPCs require the existing input and output grants", async () => {
+    const mappings = [
+      ["agent.message.receipt.get.request", ["send_agent_message_request"]],
+      ["agent.message.receipt.get.response", ["send_agent_message_response"]],
+      ["schedule.state.transition.request", ["schedule/pause", "schedule/resume"]],
+      ["schedule.state.restore.request", ["schedule/pause", "schedule/resume"]],
+      [
+        "schedule.state.transition.response",
+        ["schedule/pause/response", "schedule/resume/response"],
+      ],
+      ["schedule.state.restore.response", ["schedule/pause/response", "schedule/resume/response"]],
+    ] as const;
+    for (const [rpc, grants] of mappings) {
+      expect(isSessionRpcAllowed(grants, rpc)).toBe(true);
+      expect(isSessionRpcAllowed([rpc], rpc)).toBe(false);
+      expect(isSessionRpcAllowed(["hub.execution.*"], rpc)).toBe(false);
+      for (const omitted of grants) {
+        expect(
+          isSessionRpcAllowed(
+            grants.filter((grant) => grant !== omitted),
+            rpc,
+          ),
+        ).toBe(false);
+      }
+    }
+    const messages: SessionOutboundMessage[] = [];
+    const get = vi.fn();
+    const session = createSessionForTest({
+      scopes: ["hub.execution.*"],
+      messages,
+      agentStorage: { get },
+    });
+    for (const request of [
+      {
+        type: "agent.message.receipt.get.request",
+        requestId: "receipt-denied",
+        agentId: "agent",
+        messageId: "message",
+      },
+      {
+        type: "schedule.state.transition.request",
+        requestId: "transition-denied",
+        scheduleId: "schedule",
+        operationId: "operation",
+        targetStatus: "paused",
+      },
+      {
+        type: "schedule.state.restore.request",
+        requestId: "restore-denied",
+        scheduleId: "schedule",
+        operationId: "operation",
+      },
+      {
+        type: "send_agent_message_request",
+        requestId: "send-denied",
+        agentId: "agent",
+        text: "must not send",
+        guard: {
+          expectedAgentId: "agent",
+          expectedUpdatedAt: "now",
+          expectedStatus: "idle",
+          expectedArchivedAt: null,
+        },
+      },
+    ] as const)
+      await session.handleMessage(request);
+    expect(messages).toHaveLength(4);
+    expect(
+      messages.every(
+        (message) => message.type === "rpc_error" && message.payload.code === "access_denied",
+      ),
+    ).toBe(true);
+    expect(get).not.toHaveBeenCalled();
+  });
+
   test("rejects an RPC outside an exact grant with the generic RPC error", async () => {
     const messages: SessionOutboundMessage[] = [];
     const session = createSessionForTest({
