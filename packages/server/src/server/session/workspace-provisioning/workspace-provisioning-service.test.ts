@@ -572,6 +572,68 @@ test("createWorkspaceForDirectory classifies unknown and archived explicit proje
   } satisfies Partial<WorkspaceProvisioningError>);
 });
 
+test("findOrCreateProjectForDirectory attaches a linked worktree to its main repository project", async () => {
+  const mainRepoRoot = path.join(tmpDir, "main-repo");
+  const worktree = path.join(tmpDir, "worktrees", "feature-a");
+  const linkedWorktreeProvisioning = createWorkspaceProvisioningService({
+    workspaceRegistry,
+    projectRegistry,
+    workspaceGitService: createNoopWorkspaceGitService({
+      peekSnapshot: () => null,
+      getCheckout: async (cwd: string) => ({
+        cwd,
+        isGit: true,
+        currentBranch: cwd === mainRepoRoot ? "main" : "feature/a",
+        remoteUrl: null,
+        worktreeRoot: cwd,
+        isPaseoOwnedWorktree: cwd !== mainRepoRoot,
+        mainRepoRoot: cwd === mainRepoRoot ? null : mainRepoRoot,
+      }),
+    }),
+  });
+
+  const mainProject =
+    await linkedWorktreeProvisioning.findOrCreateProjectForDirectory(mainRepoRoot);
+  const worktreeProject =
+    await linkedWorktreeProvisioning.findOrCreateProjectForDirectory(worktree);
+
+  expect(worktreeProject.projectId).toBe(mainProject.projectId);
+  expect(await projectRegistry.list()).toHaveLength(1);
+
+  const workspace = await linkedWorktreeProvisioning.findOrCreateWorkspaceForDirectory(worktree);
+  expect(workspace).toMatchObject({
+    projectId: mainProject.projectId,
+    cwd: worktree,
+    mainRepoRoot,
+  });
+});
+
+test("findOrCreateProjectForDirectory still creates a project for a worktree whose main repository is unregistered", async () => {
+  const mainRepoRoot = path.join(tmpDir, "main-repo");
+  const worktree = path.join(tmpDir, "worktrees", "feature-b");
+  const orphanWorktreeProvisioning = createWorkspaceProvisioningService({
+    workspaceRegistry,
+    projectRegistry,
+    workspaceGitService: createNoopWorkspaceGitService({
+      peekSnapshot: () => null,
+      getCheckout: async (cwd: string) => ({
+        cwd,
+        isGit: true,
+        currentBranch: "feature/b",
+        remoteUrl: null,
+        worktreeRoot: cwd,
+        isPaseoOwnedWorktree: true,
+        mainRepoRoot,
+      }),
+    }),
+  });
+
+  const project = await orphanWorktreeProvisioning.findOrCreateProjectForDirectory(worktree);
+
+  expect(project.rootPath).toBe(worktree);
+  expect(await projectRegistry.list()).toHaveLength(1);
+});
+
 test("findOrCreateProjectForDirectory keeps nested selected roots independent", async () => {
   const repo = path.join(tmpDir, "repo");
   gitRoots.add(repo);

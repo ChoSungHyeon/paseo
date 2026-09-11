@@ -175,6 +175,11 @@ export function createWorkspaceProvisioningService(deps: {
     const rootPath = resolve(cwd);
     const checkout = await workspaceGitService.getCheckout(rootPath);
     const timestamp = new Date().toISOString();
+    // A linked worktree belongs to the project that owns its main repository. Registering the
+    // worktree path as its own project root leaves a duplicate, worktree-named project in the
+    // sidebar (one per `--new-workspace local --cwd <worktree>` or `create_workspace {path}`).
+    const owningProject = await findActiveProjectOwningWorktree(rootPath, checkout.mainRepoRoot);
+    if (owningProject) return owningProject;
     return projectRegistry.getOrCreateActiveByRoot({
       rootPath,
       kind: checkout.isGit ? "git" : "non_git",
@@ -188,6 +193,22 @@ export function createWorkspaceProvisioningService(deps: {
       }),
       timestamp,
     });
+  }
+
+  async function findActiveProjectOwningWorktree(
+    rootPath: string,
+    mainRepoRoot: string | null,
+  ): Promise<PersistedProjectRecord | undefined> {
+    if (!mainRepoRoot || areEquivalentPaths(mainRepoRoot, rootPath)) return undefined;
+    return (await projectRegistry.list())
+      .filter(
+        (project) => !project.archivedAt && areEquivalentPaths(project.rootPath, mainRepoRoot),
+      )
+      .sort(
+        (left, right) =>
+          Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+          left.projectId.localeCompare(right.projectId),
+      )[0];
   }
 
   async function requireActiveProject(projectId: string): Promise<PersistedProjectRecord> {
