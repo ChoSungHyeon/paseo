@@ -5110,6 +5110,80 @@ describe("agent snapshot MCP serialization", () => {
     expect(spies.agentStorage.get).toHaveBeenCalledWith("archived-agent");
   });
 
+  it("preserves durable archive state when get_agent_status sees a history-loaded snapshot", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const archivedAt = "2026-04-12T00:00:00.000Z";
+    spies.agentManager.getAgent.mockReturnValue(
+      createManagedAgent({ id: "history-loaded-agent", lifecycle: "idle" }),
+    );
+    spies.agentStorage.get.mockResolvedValue(
+      createStoredRecord({
+        id: "history-loaded-agent",
+        archivedAt,
+        lastStatus: "closed",
+      }),
+    );
+
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      logger,
+      providerSnapshotManager: createClaudeOnlyManager(),
+    });
+    const tool = registeredTool(server, "get_agent_status");
+    const response = await tool.handler({ agentId: "history-loaded-agent" });
+
+    expect(response.structuredContent).toEqual({
+      status: "closed",
+      snapshot: expect.objectContaining({
+        id: "history-loaded-agent",
+        status: "closed",
+        archivedAt,
+      }),
+    });
+  });
+
+  it("keeps a history-loaded archived snapshot out of the default list_agents result", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const archivedAt = new Date().toISOString();
+    const record = createStoredRecord({
+      id: "history-loaded-agent",
+      archivedAt,
+      lastStatus: "closed",
+      updatedAt: archivedAt,
+      lastActivityAt: archivedAt,
+    });
+    const snapshot = createManagedAgent({
+      id: "history-loaded-agent",
+      cwd: record.cwd,
+      lifecycle: "idle",
+      updatedAt: new Date(archivedAt),
+    });
+    spies.agentManager.listAgents.mockReturnValue([snapshot]);
+    spies.agentStorage.get.mockResolvedValue(record);
+    spies.agentStorage.list.mockResolvedValue([record]);
+
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      logger,
+      providerSnapshotManager: createClaudeOnlyManager(),
+    });
+    const tool = registeredTool(server, "list_agents");
+
+    const defaultResponse = await tool.handler({ cwd: record.cwd });
+    expect(agentsOf(defaultResponse)).toEqual([]);
+
+    const archivedResponse = await tool.handler({ cwd: record.cwd, includeArchived: true });
+    expect(agentsOf(archivedResponse)).toEqual([
+      expect.objectContaining({
+        id: "history-loaded-agent",
+        status: "closed",
+        archivedAt,
+      }),
+    ]);
+  });
+
   it("returns full-detail snapshots from get_agent_status", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
     spies.agentStorage.get.mockResolvedValue({ title: "Full detail agent" });

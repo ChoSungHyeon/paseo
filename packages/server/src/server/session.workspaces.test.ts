@@ -1511,6 +1511,29 @@ test("archive emits an authoritative agent_update upsert for subscribed clients"
     archivedAt: expect.any(String),
     requestId: "req-archive",
   });
+  expect(logger.info).toHaveBeenCalledWith(
+    {
+      auditEvent: true,
+      action: "agent.archive",
+      actor: "unattributed",
+      agentId: "agent-1",
+      requestId: "req-archive",
+      phase: "requested",
+    },
+    "Agent archive requested",
+  );
+  expect(logger.info).toHaveBeenCalledWith(
+    {
+      auditEvent: true,
+      action: "agent.archive",
+      actor: "unattributed",
+      agentId: "agent-1",
+      requestId: "req-archive",
+      phase: "completed",
+      archivedAt: expect.any(String),
+    },
+    "Agent archive completed",
+  );
 });
 
 test("workspace clear attention clears stored-only agents and responds", async () => {

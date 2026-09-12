@@ -215,8 +215,23 @@ export async function serializeSnapshotWithMetadata(
   snapshot: ManagedAgent,
   logger: Logger,
 ) {
-  const title = await resolveAgentTitle(agentStorage, snapshot.id, logger);
-  return serializeAgentSnapshot(snapshot, { title });
+  let record;
+  try {
+    record = await agentStorage.get(snapshot.id);
+  } catch (error) {
+    logger.error({ err: error, agentId: snapshot.id }, "Failed to load agent metadata");
+  }
+
+  const payload = serializeAgentSnapshot(snapshot, { title: record?.title ?? null });
+  if (!record?.archivedAt) {
+    return { ...payload, archivedAt: null };
+  }
+
+  return {
+    ...payload,
+    status: "closed" as const,
+    archivedAt: record.archivedAt,
+  };
 }
 
 export function parseDurationString(input: string): number {

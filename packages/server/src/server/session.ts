@@ -2398,9 +2398,30 @@ export class Session {
   }
 
   private async handleArchiveAgentRequest(agentId: string, requestId: string): Promise<void> {
-    this.sessionLogger.info({ agentId }, `Archiving agent ${agentId}`);
+    const auditFields = {
+      auditEvent: true,
+      action: "agent.archive",
+      actor: "unattributed",
+      agentId,
+      requestId,
+    } as const;
+    this.sessionLogger.info({ ...auditFields, phase: "requested" }, "Agent archive requested");
 
-    const { archivedAt } = await this.archiveAgentForClose(agentId);
+    let archivedAt: string;
+    try {
+      ({ archivedAt } = await this.archiveAgentForClose(agentId));
+    } catch (error) {
+      this.sessionLogger.error(
+        { ...auditFields, phase: "failed", err: error },
+        "Agent archive failed",
+      );
+      throw error;
+    }
+
+    this.sessionLogger.info(
+      { ...auditFields, phase: "completed", archivedAt },
+      "Agent archive completed",
+    );
 
     this.emit({
       type: "agent_archived",

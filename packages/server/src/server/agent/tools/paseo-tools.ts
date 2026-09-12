@@ -1964,7 +1964,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         return {
           content: [],
           structuredContent: ensureValidJson({
-            status: snapshot.lifecycle,
+            status: structuredSnapshot.status,
             snapshot: structuredSnapshot,
           }),
         };
@@ -2035,6 +2035,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         .map((record) => buildStoredAgentPayload(record, registeredProviderIds));
       const agents = [...liveAgents, ...storedAgents]
         .map(toAgentListItemPayload)
+        .filter((agent) => includeArchived || !agent.archivedAt)
         .filter((agent) => !requestedCwd || isSameOrDescendantPath(requestedCwd, agent.cwd))
         .filter((agent) => !statusFilter || statusFilter.has(agent.status))
         .filter((agent) => !agent.archivedAt || resolveAgentListActivityTime(agent) >= sinceMs)
