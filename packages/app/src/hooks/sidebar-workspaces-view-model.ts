@@ -691,44 +691,46 @@ export function pruneSidebarOrder(
   };
 
   const workspaceOrderByProject: Record<string, string[]> = {};
-  // `emptied` is a record this pass emptied; `alreadyEmpty` is one that was empty when we
-  // found it, which is not our evidence. Both lose their projectOrder slot once the
-  // project is off the sidebar — but only `emptied` is deleted from disk.
   const emptied = new Set<string>();
-  const alreadyEmpty = new Set<string>();
   let ordersChanged = false;
   for (const [projectViewKey, order] of Object.entries(state.workspaceOrderByProject)) {
     // The placement history is a fixed-size log of identity transitions rather than a
     // workspace list, so it is never a candidate.
-    const next =
+    let next =
       projectViewKey === SIDEBAR_PLACEMENT_HISTORY_KEY ||
       !Array.isArray(order) ||
       order.length === 0
         ? order
         : keepLive(order);
+    // A record this pass would EMPTY while its project is still on screen is left as it
+    // was. Its stale keys still name the complete server that owns them, so a later pass
+    // removes them and the projectOrder slot in the SAME step; an empty array names no
+    // server and would leave nothing to act on. A record that was ALREADY empty is not
+    // evidence of anything and is never touched either way.
+    if (next !== order && next.length === 0 && visibleProjects.has(projectViewKey)) {
+      next = order;
+    }
     workspaceOrderByProject[projectViewKey] = next;
-    const changed = next !== order;
-    if (changed) ordersChanged = true;
-    if (projectViewKey === SIDEBAR_PLACEMENT_HISTORY_KEY || next.length > 0) continue;
-    // Emptiness is read off the STATE, not off the transition. A project that empties
-    // while it is still on screen keeps its (now empty) record as the marker and loses
-    // its slot on a later pass; a transition-scoped rule would delete the record on the
-    // first pass, find nothing to act on during the second, and strand the slot forever.
-    if (!visibleProjects.has(projectViewKey)) {
-      (changed ? emptied : alreadyEmpty).add(projectViewKey);
+    if (next !== order) {
+      ordersChanged = true;
+      if (next.length === 0) emptied.add(projectViewKey);
     }
   }
 
   const pinnedWorkspaceOrder = keepLive(state.pinnedWorkspaceOrder);
-  // A project with no workspace order left that this device can no longer see is gone. A
-  // visible one stays, empty record and all: dropping it would let the next reconcile
-  // append it straight back and this remove it again. A projectOrder key with NO record
-  // at all is a project this device has no evidence about, and is left alone.
-  const projectOrder = state.projectOrder.filter(
-    (key) => !emptied.has(key) && !alreadyEmpty.has(key),
-  );
+  // A project whose order was removed, and that this device can no longer see, is gone. A
+  // VISIBLE one keeps both its slot and its record: dropping it would let the next
+  // reconcile append it straight back and this remove it again. A projectOrder key with
+  // NO record at all is a project this device has no evidence about, and is left alone.
+  const projectOrder = state.projectOrder.filter((key) => !emptied.has(key));
 
-  if (!ordersChanged && projectOrder.length === state.projectOrder.length) return state;
+  if (
+    !ordersChanged &&
+    pinnedWorkspaceOrder === state.pinnedWorkspaceOrder &&
+    projectOrder.length === state.projectOrder.length
+  ) {
+    return state;
+  }
 
   for (const projectViewKey of emptied) delete workspaceOrderByProject[projectViewKey];
   return { projectOrder, pinnedWorkspaceOrder, workspaceOrderByProject };

@@ -1010,16 +1010,34 @@ describe("pruneSidebarOrder", () => {
       pinnedWorkspaceOrder: [],
       workspaceOrderByProject: { p: ["s:last"] },
     };
-    const emptying = pruneSidebarOrder(state, live({ s: [] }, ["s"], ["p"]));
-    expect(emptying.projectOrder).toEqual(["p"]);
-    expect(emptying.workspaceOrderByProject.p).toEqual([]);
+    // The record is left exactly as it was: those stale keys are what name the server
+    // that owns them, and an empty array would leave the next pass nothing to act on. So
+    // this pass has nothing to write at all.
+    const holding = pruneSidebarOrder(state, live({ s: [] }, ["s"], ["p"]));
+    expect(holding).toBe(state);
 
-    // The slot is dropped on a LATER pass. Scoping the removal to the transition would
-    // have deleted the record on the first pass, found nothing on the second, and left
-    // the slot behind forever.
-    const gone = pruneSidebarOrder(emptying, live({ s: [] }, ["s"]));
+    // Once it leaves the sidebar, the pass that removes the keys removes the slot in the
+    // same step. Scoping the removal to the transition would have deleted the record on
+    // the first pass, found nothing on the second, and stranded the slot forever.
+    const gone = pruneSidebarOrder(holding, live({ s: [] }, ["s"]));
     expect(gone.projectOrder).toEqual([]);
+    expect(gone.workspaceOrderByProject.p).toBeUndefined();
     expect(pruneSidebarOrder(gone, live({ s: [] }, ["s"]))).toBe(gone);
+  });
+
+  it("never costs a project its slot on the strength of an already-empty record", () => {
+    // An empty array names no server, so it is not evidence that this device emptied
+    // anything — and treating it as such dropped a hidden project's slot on the strength
+    // of some OTHER server's prune.
+    const state = {
+      projectOrder: ["hidden", "p"],
+      pinnedWorkspaceOrder: [],
+      workspaceOrderByProject: { hidden: [], p: ["s:gone"] },
+    };
+    const next = pruneSidebarOrder(state, live({ s: [] }, ["s"]));
+    expect(next.projectOrder).toEqual(["hidden"]);
+    expect(next.workspaceOrderByProject.hidden).toEqual([]);
+    expect(next.workspaceOrderByProject.p).toBeUndefined();
   });
 
   it("leaves a projectOrder key with no order record at all alone", () => {
