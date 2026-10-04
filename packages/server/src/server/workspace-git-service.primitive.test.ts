@@ -2316,6 +2316,25 @@ describe("WorkspaceGitServiceImpl checkout identity", () => {
             },
       );
       expect(identity).toEqual(expected);
+      let expectedBranch: string | null = "main";
+      let expectedRemote: string | null = "https://github.com/acme/repo.git";
+      if (kind === "non-git") {
+        expectedBranch = null;
+        expectedRemote = null;
+      } else if (kind === "bare repository worktree") {
+        expectedRemote = repoDir;
+      } else if (cwd !== repoDir) {
+        expectedBranch = "feature";
+      }
+      expect(identity).toEqual({
+        cwd,
+        isGit: kind !== "non-git",
+        currentBranch: expectedBranch,
+        remoteUrl: expectedRemote,
+        worktreeRoot: kind === "non-git" ? null : cwd,
+        mainRepoRoot: cwd !== repoDir && kind !== "bare repository worktree" ? repoDir : null,
+        isPaseoOwnedWorktree: ["Paseo worktree", "Paseo worktree without metadata"].includes(kind),
+      });
       expect(fullStatusReads).toBe(0);
       expect(service.peekSnapshot(cwd)).toBeNull();
       expect(
