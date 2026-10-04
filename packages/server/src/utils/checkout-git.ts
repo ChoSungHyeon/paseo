@@ -2024,6 +2024,51 @@ async function resolveFactsPullRequestLookupTarget(input: {
   return target;
 }
 
+export type CheckoutIdentity =
+  | CheckoutStatus
+  | Pick<
+      CheckoutStatusGit,
+      "isGit" | "repoRoot" | "mainRepoRoot" | "currentBranch" | "remoteUrl" | "isPaseoOwnedWorktree"
+    >;
+
+export async function getCheckoutIdentity(
+  cwd: string,
+  context?: CheckoutContext,
+): Promise<CheckoutIdentity> {
+  const inspected = await inspectCheckoutContext(cwd, context);
+  if (!inspected) {
+    return { isGit: false };
+  }
+
+  const mainRepoRoot = await getMainRepoRootFromCommonDir(
+    cwd,
+    inspected.gitCommonDir,
+    context,
+  ).catch(() => null);
+  // Status classifies owned paths as Paseo worktrees only when a base ref is available.
+  // Ordinary checkouts do not need base resolution to establish their identity.
+  const baseRef = inspected.paseoWorktree.isPaseoOwnedWorktree
+    ? (readPaseoWorktreeBaseRef(inspected.paseoWorktree.worktreeRoot) ??
+      (await resolveBaseRef(cwd, context)))
+    : null;
+  const isPaseoOwnedWorktree = inspected.paseoWorktree.isPaseoOwnedWorktree && Boolean(baseRef);
+  let normalizedMainRepoRoot: string | null = null;
+  if (isPaseoOwnedWorktree) {
+    normalizedMainRepoRoot = mainRepoRoot ?? inspected.worktreeRoot;
+  } else if (mainRepoRoot && resolve(mainRepoRoot) !== resolve(inspected.worktreeRoot)) {
+    normalizedMainRepoRoot = mainRepoRoot;
+  }
+
+  return {
+    isGit: true,
+    repoRoot: inspected.worktreeRoot,
+    mainRepoRoot: normalizedMainRepoRoot,
+    currentBranch: inspected.currentBranch,
+    remoteUrl: inspected.remoteUrl,
+    isPaseoOwnedWorktree,
+  };
+}
+
 export async function getCheckoutSnapshotFacts(
   cwd: string,
   context?: CheckoutContext,
